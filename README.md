@@ -2,7 +2,7 @@
 
 ### Draw a visual representation of the branch-and-cut tree of SCIP using spatial dissimilarities of the node LP solutions.
 
-## [Example](TreeD_for_instance_lseu_generated_with_SCIP_5.0.1.html)
+## [Example](https://plot.ly/~mattmilten/103/)
 
 ## Usage:
 - run `TreeD.py` to get usage information

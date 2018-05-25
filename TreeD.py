@@ -1,4 +1,4 @@
-from pyscipopt import Model, Eventhdlr, quicksum, SCIP_EVENTTYPE, SCIP_RESULT, SCIP_STAGE
+from pyscipopt import Model, Eventhdlr, quicksum, SCIP_EVENTTYPE
 from sklearn import manifold
 import pandas as pd
 from plotly.graph_objs import *
@@ -72,7 +72,7 @@ class TreeD:
         self.mode = '3D'
         self.use_iplot = False
         self.colorcondition = False
-        self.weights = 'kernel'
+        self.weights = 'knn'
         self.kernelfunction = 'triangular'
         self.knn_k = 2
         self.fig = None
@@ -312,7 +312,7 @@ class TreeD:
             data = Data([node_object_2d, edge_object_2d, optval_object_2d])
             fig = Figure(data = data, layout = layout)
         else:
-            print('wrong mode: ', self.mode)
+            print('deprecated mode: ', self.mode)
             return
             fig = tools.make_subplots(cols = 2,
 #                                       subplot_titles = ('Multidimensional Scaling in 1D', ''),
