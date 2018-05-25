@@ -1,6 +1,6 @@
 # TreeD
 
-### Draw a visual representation of the branch-and-cut tree of SCIP using spatial dissimilarities of the node LP solutions.
+### Visual representation of the branch-and-cut tree of SCIP using spatial dissimilarities of LP solutions
 
 ## [Example](https://plot.ly/~mattmilten/103/)
 
