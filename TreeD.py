@@ -32,6 +32,7 @@ class LPstatEventhdlr(Eventhdlr):
             parent = parentnode.getNumber()
         else:
             parent = 1
+        depth = node.getDepth()
 
         age = self.model.getNNodes()
         condition = self.model.getCondition()
@@ -40,6 +41,7 @@ class LPstatEventhdlr(Eventhdlr):
                               'objval': objval,
                               'parent': parent,
                               'age': age,
+                              'depth':depth,
                               'first': firstlp,
                               'condition': condition
                              })
@@ -71,7 +73,9 @@ class TreeD:
     def __init__(self):
         self.mode = '3D'
         self.use_iplot = False
-        self.colorcondition = False
+        self.color = 'age'
+        self.colorscale = 'Portland'
+        self.colorbar = False
         self.weights = 'knn'
         self.kernelfunction = 'triangular'
         self.knn_k = 2
@@ -184,23 +188,16 @@ class TreeD:
     def draw(self):
         """Draw the tree, depending on the mode"""
 
-        if self.colorcondition:
-            color = self.df['condition']
-            marker = Marker(symbol = self._symbol,
-                            size = 4,
-                            color = color,
-                            colorscale = 'Portland',
-                            colorbar = ColorBar(title='Condition', thickness=10, x=0),
-                            # cmin = 1.0,
-                            # cmax = 1e10
-                            )
-        else:
-            color = self.df['age']
-            marker = Marker(symbol = self._symbol,
-                            size = 4,
-                            color = color,
-                            colorscale = 'Portland',
-                            )
+        color = self.df[self.color]
+        marker = Marker(symbol = self._symbol,
+                        size = 4,
+                        color = color,
+                        colorscale = self.colorscale,
+                        )
+
+        if self.colorbar:
+            colorbar = ColorBar(title=self.color, thickness=10, x=0)
+            marker.update(colorbar=colorbar)
 
         self.generateEdges(separate_frames=False)
 
@@ -263,7 +260,7 @@ class TreeD:
                                      marker = Marker(symbol = self._symbol,
                                                      size = 10,
                                                      color = color,
-                                                     colorscale = 'Portland',
+                                                     colorscale = self.colorscale,
                                                     ),
                                      hovertext = self.df['number'],
                                      hoverinfo = 'y+text+name',
@@ -299,6 +296,7 @@ class TreeD:
         scene = Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
 
         layout = Layout(title = 'TreeD for instance '+self.probname+', generated with '+self.scipversion,
+                        # font = dict(size=12),
                         autosize = True,
                         showlegend = True,
                         hovermode = 'closest',
@@ -337,7 +335,7 @@ class TreeD:
             nicefilename = nicefilename.replace('"', '')
             nicefilename = nicefilename.replace(',', '')
             # generate html code to include into a website as <div>
-            self.div = plot(fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=False, output_type='div')
+            self.div = plot(fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=True, output_type='div')
             plot(fig, filename = nicefilename + '.html', show_link=False)
 
 
@@ -373,11 +371,12 @@ class TreeD:
         self.performSpatialAnalysis()
 
         print("storing all collected data in a DataFrame")
-        self.df = pd.DataFrame(self.nodelist, columns = ['number', 'parent', 'objval', 'age', 'first', 'condition'])
-        if self.mode in ['3D', 'combined']:
+        columns = self.nodelist[0].keys()
+        self.df = pd.DataFrame(self.nodelist, columns = columns)
+        if self.mode in ['3D']:
             coords = pd.DataFrame(self.xy, columns = ['x', 'y'])
             self.df = pd.merge(self.df, coords, left_index = True, right_index = True, how = 'outer')
-        if self.mode in ['2D', 'combined']:
+        if self.mode in ['2D']:
             coords_2d = pd.DataFrame(self.x2, columns = ['x2'])
             self.df = pd.merge(self.df, coords_2d, left_index = True, right_index = True, how = 'outer')
 
