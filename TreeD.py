@@ -64,6 +64,22 @@ class TreeD:
     Draw a visual representation of the branch-and-cut tree of SCIP for
     a particular instance using spatial dissimilarities of the node LP solutions.
 
+    Attributes:
+        mode (str): '2D' or '3D' plotting
+        use_iplot (bool): whether to plot inline in a notebook
+        color (str): data to use for colorization of nodes ('age', 'depth', 'condition')
+        colorscale (str): type of colorization, e.g. 'Viridis', 'Portland'
+        colorbar (bool): whether to show the colorbar
+        title (bool): show/hide title of the plot
+        showlegend (bool): show/hide logend of the plot
+        fontsize (str): fixed fontsize or 'auto'
+        weights (str): type of weights for pysal, e.g. 'knn'
+        kernelfunction (str): type of kernelfunction for distance metrics, e.g. 'triangular'
+        knn_k (int): number of k-nearest neighbors
+        fig (object): handler for generated figure
+        df (Dataframe): storage of tree information
+        div (str): html for saving a plot.ly object to be included as div
+
     Dependencies:
      - PySCIPOpt to solve the instance and generate the necessary tree data
      - Plot.ly to draw the 3D visualization
@@ -76,12 +92,15 @@ class TreeD:
         self.color = 'age'
         self.colorscale = 'Portland'
         self.colorbar = False
+        self.title = True
+        self.showlegend = True
+        self.fontsize = 'auto'
         self.weights = 'knn'
         self.kernelfunction = 'triangular'
         self.knn_k = 2
         self.fig = None
         self.df = None
-        self.div = None   # used for saving a plot.ly html object to be included as div
+        self.div = None
         self._symbol = []
 
     def performMDS(self):
@@ -294,13 +313,14 @@ class TreeD:
         yaxis = YAxis(showticklabels=False, title='Y')
         zaxis = ZAxis(title='obj value')
         scene = Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
+        title = 'TreeD for instance '+self.probname+', generated with '+self.scipversion if self.title else ''
 
-        layout = Layout(title = 'TreeD for instance '+self.probname+', generated with '+self.scipversion,
-                        # font = dict(size=12),
-                        autosize = True,
-                        showlegend = True,
-                        hovermode = 'closest',
-                        scene = scene
+        layout = Layout(title=title,
+                        font=dict(size=self.fontsize),
+                        autosize=True,
+                        showlegend=self.showlegend,
+                        hovermode='closest',
+                        scene=scene
                        )
 
         if self.mode == '3D':
