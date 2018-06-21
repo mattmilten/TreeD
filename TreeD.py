@@ -65,7 +65,6 @@ class TreeD:
     a particular instance using spatial dissimilarities of the node LP solutions.
 
     Attributes:
-        mode (str): '2D' or '3D' plotting
         use_iplot (bool): whether to plot inline in a notebook
         color (str): data to use for colorization of nodes ('age', 'depth', 'condition')
         colorscale (str): type of colorization, e.g. 'Viridis', 'Portland'
@@ -87,7 +86,6 @@ class TreeD:
     """
 
     def __init__(self):
-        self.mode = '3D'
         self.use_iplot = False
         self.color = 'age'
         self.colorscale = 'Portland'
@@ -107,12 +105,8 @@ class TreeD:
         """compute multidimensional scaling of LP solution values"""
         df = pd.DataFrame(self.nodelist, columns = ['LPsol'])
         df = df['LPsol'].apply(pd.Series).fillna(value=0)
-        if self.mode == '3D':
-            mds = manifold.MDS(2)
-            self.xy = mds.fit_transform(df)
-        if self.mode == '2D':
-            mds = manifold.MDS(1)
-            self.x2 = mds.fit_transform(df)
+        mds = manifold.MDS(n_components=2, n_init=8, n_jobs=4, max_iter=600, eps=1e-3 )
+        self.xy = mds.fit_transform(df)
 
     def performSpatialAnalysis(self):
         """compute spatial correlation between LP solutions and their condition numbers"""
@@ -131,15 +125,10 @@ class TreeD:
                                 (used for tree growth animation)
         """
 
-        if not self.mode in ['3D', '2D']:
-            return
         # 3D edges
         Xe = []
         Ye = []
         Ze = []
-
-        # 2D edges
-        xe = []
 
         if not separate_frames:
             for index, curr in self.df.iterrows():
@@ -155,17 +144,13 @@ class TreeD:
                     Xe += [None]
                     Ye += [None]
                     Ze += [None]
-                    xe += [None]
                 else:
                     # found an improving LP solution at the same node as before
                     self._symbol += ['diamond']
                     parent = self.df.iloc[index - 1]
 
-                if self.mode in ['3D', 'combined']:
-                    Xe += [float(parent['x']), curr['x']]
-                    Ye += [float(parent['y']), curr['y']]
-                if self.mode in ['2D', 'combined']:
-                    xe += [float(parent['x2']), curr['x2']]
+                Xe += [float(parent['x']), curr['x']]
+                Ye += [float(parent['y']), curr['y']]
                 Ze += [float(parent['objval']), curr['objval']]
 
         else:
@@ -202,112 +187,75 @@ class TreeD:
         self.Xe = Xe
         self.Ye = Ye
         self.Ze = Ze
-        self.xe = xe
+
+    def _create_nodes_and_projections(self, nodetype='age'):
+        colorbar = ColorBar(title=nodetype[0].upper()+nodetype[1:], thickness=10, x=0)
+        marker = Marker(symbol = self._symbol,
+                        size = 4,
+                        color = self.df[nodetype],
+                        colorscale = self.colorscale,
+                        colorbar = colorbar)
+        node_object = Scatter3d(x = self.df['x'],
+                                y = self.df['y'],
+                                z = self.df['objval'],
+                                mode = 'markers+text',
+                                marker = marker,
+                                hovertext = self.df['number'],
+                                hoverinfo = 'z+text+name',
+                                opacity = 0.7,
+                                name = 'LP solutions',
+                                visible = True if nodetype == 'age' else False
+                                )
+        proj_object = Scatter3d(x = self.df['x'],
+                                y = self.df['y'],
+                                z = self.df['objval'],
+                                mode = 'markers+text',
+                                marker = marker,
+                                hovertext = self.df['number'],
+                                hoverinfo = 'z+text+name',
+                                opacity = 0.0,
+                                projection = dict(z = dict(show = True)),
+                                name = 'projection of LP solutions',
+                                visible = True if nodetype == 'age' else False
+                                )
+        return node_object, proj_object
 
     def draw(self):
         """Draw the tree, depending on the mode"""
 
-        color = self.df[self.color]
-        marker = Marker(symbol = self._symbol,
-                        size = 4,
-                        color = color,
-                        colorscale = self.colorscale,
-                        )
-
-        if self.colorbar:
-            colorbar = ColorBar(title=self.color, thickness=10, x=0)
-            marker.update(colorbar=colorbar)
-
         self.generateEdges(separate_frames=False)
 
-        if self.mode in ['3D']:
-            node_object = Scatter3d(x = self.df['x'],
-                                    y = self.df['y'],
-                                    z = self.df['objval'],
-                                    mode = 'markers+text',
-                                    marker = marker,
-                                    hovertext = self.df['number'],
-                                    hoverinfo = 'z+text+name',
-                                    opacity = 0.7,
-                                    name = 'LP solutions'
-                                   )
+        node_object_age, proj_object_age = self._create_nodes_and_projections(nodetype='age')
+        node_object_depth, proj_object_depth = self._create_nodes_and_projections(nodetype='depth')
+        node_object_cond, proj_object_cond = self._create_nodes_and_projections(nodetype='condition')
 
-            proj_object = Scatter3d(x = self.df['x'],
-                                    y = self.df['y'],
-                                    z = self.df['objval'],
-                                    mode = 'markers+text',
-                                    marker = marker,
-                                    hovertext = self.df['number'],
-                                    hoverinfo = 'z+text+name',
-                                    opacity = 0.0,
-                                    projection = dict(z = dict(show = True)),
-                                    name = 'projection of LP solutions'
-                                   )
+        edge_object = Scatter3d(x = self.Xe,
+                                y = self.Ye,
+                                z = self.Ze,
+                                mode = 'lines',
+                                line = Line(color = 'rgb(75,75,75)',
+                                            width = 2
+                                            ),
+                                hoverinfo = 'none',
+                                name = 'edges'
+                                )
 
-            edge_object = Scatter3d(x = self.Xe,
-                                    y = self.Ye,
-                                    z = self.Ze,
+        min_x = min(self.df['x'])
+        max_x = max(self.df['x'])
+        min_y = min(self.df['y'])
+        max_y = max(self.df['y'])
+
+        optval_object = Scatter3d(x = [min_x, min_x, max_x, max_x, min_x],
+                                    y = [min_y, max_y, max_y, min_y, min_y],
+                                    z = [self.optval] * 5,
                                     mode = 'lines',
-                                    line = Line(color = 'rgb(75,75,75)',
-                                                width = 2
-                                               ),
-                                    hoverinfo = 'none',
-                                    name = 'edges'
-                                  )
-
-            min_x = min(self.df['x'])
-            max_x = max(self.df['x'])
-            min_y = min(self.df['y'])
-            max_y = max(self.df['y'])
-
-            optval_object = Scatter3d(x = [min_x, min_x, max_x, max_x, min_x],
-                                      y = [min_y, max_y, max_y, min_y, min_y],
-                                      z = [self.optval] * 5,
-                                      mode = 'lines',
-                                      line = Line(color = 'rgb(0,200,0)',
-                                                  width = 10
-                                                 ),
-                                      hoverinfo = 'name+z',
-                                      name = 'optimal value',
-                                      opacity = 0.3
-                                     )
-
-        if self.mode in ['2D']:
-            node_object_2d = Scatter(x = self.df['x2'],
-                                     y = self.df['objval'],
-                                     mode = 'markers+text',
-                                     marker = Marker(symbol = self._symbol,
-                                                     size = 10,
-                                                     color = color,
-                                                     colorscale = self.colorscale,
-                                                    ),
-                                     hovertext = self.df['number'],
-                                     hoverinfo = 'y+text+name',
-                                     name = 'LP solutions',
-                                    )
-
-            edge_object_2d = Scatter(x = self.xe,
-                                     y = self.Ze,
-                                     mode = 'lines',
-                                     line = Line(color = 'rgb(75,75,75)',
-                                                 width = 1
+                                    line = Line(color = 'rgb(0,200,0)',
+                                                width = 10
                                                 ),
-                                     hoverinfo = 'none',
-                                     name = 'edges',
+                                    hoverinfo = 'name+z',
+                                    name = 'optimal value',
+                                    opacity = 0.3
                                     )
-
-            min_x = min(self.df['x2'])
-            max_x = max(self.df['x2'])
-
-            optval_object_2d = Scatter(x = [min_x, max_x],
-                                       y = [self.optval] * 2,
-                                       mode = 'lines',
-                                       line = Line(color = 'rgb(0,200,0)',
-                                                   width = 1
-                                                  ),
-                                       hoverinfo = 'name+z',
-                                       name = 'optimal value',
-                                      )
 
         xaxis = XAxis(showticklabels=False, title='X')
         yaxis = YAxis(showticklabels=False, title='Y')
@@ -318,45 +266,61 @@ class TreeD:
         layout = Layout(title=title,
                         font=dict(size=self.fontsize),
                         autosize=True,
+                        # width=900,
+                        # height=600,
                         showlegend=self.showlegend,
                         hovermode='closest',
                         scene=scene
                        )
 
-        if self.mode == '3D':
-            data = Data([node_object, proj_object, edge_object, optval_object])
-            fig = Figure(data = data, layout = layout)
-        elif self.mode == '2D':
-            data = Data([node_object_2d, edge_object_2d, optval_object_2d])
-            fig = Figure(data = data, layout = layout)
-        else:
-            print('deprecated mode: ', self.mode)
-            return
-            fig = tools.make_subplots(cols = 2,
-#                                       subplot_titles = ('Multidimensional Scaling in 1D', ''),
-                                      specs = [[{'is_3d': True}, {'is_3d': False}]],
-                                      print_grid = False
-                                     )
-            fig.append_trace(node_object, 1, 1)
-            fig.append_trace(proj_object, 1, 1)
-            fig.append_trace(edge_object, 1, 1)
-            fig.append_trace(optval_object, 1, 1)
-            fig.append_trace(node_object_2d, 1, 2)
-            fig.append_trace(edge_object_2d, 1, 2)
-            fig.append_trace(optval_object_2d, 1, 2)
-            fig['layout'].update(layout)
+        updatemenus=list([
+            dict(
+                buttons=list([
+                    dict(
+                        args=['visible', [True, True, False, False, False, False, True, True]],
+                        label='Node Age',
+                        method='restyle'
+                    ),
+                    dict(
+                        args=['visible', [False, False, True, True, False, False, True, True]],
+                        label='Tree Depth',
+                        method='restyle'
+                    ),
+                    dict(
+                        args=['visible', [False, False, False, False, True, True, True, True]],
+                        label='LP Condition',
+                        method='restyle'
+                    )
+                ]),
+                direction = 'down',
+                showactive = True,
+                type = 'buttons',
+                # x = 1.2,
+                # y = 0.6,
+            ),
+        ])
 
-        self.fig = fig
+        # annotations = list([
+        #     dict(text='Color Mode:', showarrow=False, x=1.2, y=0.6, )
+        # ])
+        # layout['annotations'] = annotations
+        layout['updatemenus'] = updatemenus
+
+        data = Data([node_object_age, proj_object_age,
+                        node_object_depth, proj_object_depth,
+                        node_object_cond, proj_object_cond,
+                        edge_object, optval_object])
+        self.fig = Figure(data = data, layout = layout)
 
         if self.use_iplot:
-            iplot(fig, filename = layout.title.replace(' ', '_'))
+            iplot(self.fig, filename = layout.title.replace(' ', '_'))
         else:
             nicefilename = layout.title.replace(' ', '_')
             nicefilename = nicefilename.replace('"', '')
             nicefilename = nicefilename.replace(',', '')
             # generate html code to include into a website as <div>
-            self.div = plot(fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=True, output_type='div')
-            plot(fig, filename = nicefilename + '.html', show_link=False)
+            self.div = plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=True, output_type='div')
+            plot(self.fig, filename = nicefilename + '.html', show_link=False)
 
 
     def main(self):
@@ -393,12 +357,8 @@ class TreeD:
         print("storing all collected data in a DataFrame")
         columns = self.nodelist[0].keys()
         self.df = pd.DataFrame(self.nodelist, columns = columns)
-        if self.mode in ['3D']:
-            coords = pd.DataFrame(self.xy, columns = ['x', 'y'])
-            self.df = pd.merge(self.df, coords, left_index = True, right_index = True, how = 'outer')
-        if self.mode in ['2D']:
-            coords_2d = pd.DataFrame(self.x2, columns = ['x2'])
-            self.df = pd.merge(self.df, coords_2d, left_index = True, right_index = True, how = 'outer')
+        coords = pd.DataFrame(self.xy, columns = ['x', 'y'])
+        self.df = pd.merge(self.df, coords, left_index = True, right_index = True, how = 'outer')
 
 
 if __name__ == "__main__":
