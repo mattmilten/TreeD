@@ -86,6 +86,7 @@ class TreeD:
     """
 
     def __init__(self):
+        self.scip_settings = [('limits/totalnodes', 1000)]
         self.use_iplot = False
         self.color = 'age'
         self.colorscale = 'Portland'
@@ -312,15 +313,17 @@ class TreeD:
                         edge_object, optval_object])
         self.fig = Figure(data = data, layout = layout)
 
+        nicefilename = layout.title.replace(' ', '_')
+        nicefilename = nicefilename.replace('"', '')
+        nicefilename = nicefilename.replace(',', '')
+
         if self.use_iplot:
             iplot(self.fig, filename = layout.title.replace(' ', '_'))
         else:
-            nicefilename = layout.title.replace(' ', '_')
-            nicefilename = nicefilename.replace('"', '')
-            nicefilename = nicefilename.replace(',', '')
-            # generate html code to include into a website as <div>
-            self.div = plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=True, output_type='div')
             plot(self.fig, filename = nicefilename + '.html', show_link=False)
+
+        # generate html code to include into a website as <div>
+        self.div = plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=True, output_type='div')
 
 
     def main(self):
@@ -336,6 +339,9 @@ class TreeD:
         model.includeEventhdlr(eventhdlr, "LPstat", "generate LP statistics after every LP event")
         model.readProblem(self.probpath)
         model.setIntParam('presolving/maxrestarts', 0)
+
+        for setting in self.scip_settings:
+            model.setParam(setting[0], setting[1])
 
         print("solving instance "+self.probname)
         model.optimize()
