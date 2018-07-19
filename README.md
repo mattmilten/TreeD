@@ -31,4 +31,4 @@
 
 ### Preview
 
-![Preview](imgs/Preview.png)
+![Preview](imgs/Tree.gif)
