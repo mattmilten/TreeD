@@ -31,4 +31,4 @@
 
 ### Preview
 
-![Amira preview](imgs/Tree.gif)
+![Amira preview](imgs/AmiraTree.gif)
