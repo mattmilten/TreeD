@@ -21,7 +21,7 @@
 
 ### Settings
 
-![Project View](imgs/ProjectView.png)
+![Project View](res/ProjectView.png)
 
 - `DataTree.am`: SpatialGraph data file with tree nodes and edges.
 - `LineRaycast`: Module to display the SpatialGraph. Note that is needed to set the colormap according to py code output (For instance 'Color map from 1 to 70' in this picture).
@@ -31,4 +31,4 @@
 
 ### Preview
 
-![Amira preview](imgs/AmiraTree.gif)
+![Amira preview](res/AmiraTree.gif)
