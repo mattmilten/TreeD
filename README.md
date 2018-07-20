@@ -26,8 +26,7 @@
 - `DataTree.am`: SpatialGraph data file with tree nodes and edges.
 - `LineRaycast`: Module to display the SpatialGraph. Note that is needed to set the colormap according to py code output (For instance 'Color map from 1 to 70' in this picture).
 - `DataOpt.am`: SpatialGraph data file with optimun value.
-- `Opt Plane`: Display the optimun value as a plane.
-- `Local Axes`: Axes.
+- `Opt Plane`: Display the optimal value as a plane.
 
 ### Preview
 
