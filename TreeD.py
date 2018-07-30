@@ -1,7 +1,7 @@
 from pyscipopt import Model, Eventhdlr, quicksum, SCIP_EVENTTYPE
 from sklearn import manifold
 import pandas as pd
-from plotly.graph_objs import *
+import plotly.graph_objs as go
 from plotly.offline import plot, iplot
 from plotly import tools
 import pysal
@@ -100,14 +100,17 @@ class TreeD:
         self.fig = None
         self.df = None
         self.div = None
+        self.include_plotlyjs = True
         self._symbol = []
 
     def performMDS(self):
         """compute multidimensional scaling of LP solution values"""
         df = pd.DataFrame(self.nodelist, columns = ['LPsol'])
         df = df['LPsol'].apply(pd.Series).fillna(value=0)
-        mds = manifold.MDS(n_components=2, n_init=8, n_jobs=4, max_iter=600, eps=1e-3 )
+        mds = manifold.MDS(n_components=2, n_init=8, n_jobs=4, max_iter=600, eps=1e-4 )
         self.xy = mds.fit_transform(df)
+        coords = pd.DataFrame(self.xy, columns = ['x', 'y'])
+        self.df = pd.merge(self.df, coords, left_index = True, right_index = True, how = 'outer')
 
     def performSpatialAnalysis(self):
         """compute spatial correlation between LP solutions and their condition numbers"""
@@ -119,7 +122,7 @@ class TreeD:
             weights = pysal.knnW_from_array(lpsols, k=self.knn_k)
         self.moran = pysal.Moran(df['condition'].tolist(), weights)
 
-    def generateEdges(self, separate_frames=False):
+    def _generateEdges(self, separate_frames=False):
         """Generate edge information corresponding to parent information in df
 
         :param separate_frames: whether to generate separate edge sets for each node age
@@ -190,13 +193,13 @@ class TreeD:
         self.Ze = Ze
 
     def _create_nodes_and_projections(self, nodetype='age'):
-        colorbar = ColorBar(title=nodetype[0].upper()+nodetype[1:], thickness=10, x=0)
-        marker = Marker(symbol = self._symbol,
+        colorbar = go.scatter3d.marker.ColorBar(title=nodetype[0].upper()+nodetype[1:], thickness=10, x=0)
+        marker = go.scatter3d.Marker(symbol = self._symbol,
                         size = 4,
                         color = self.df[nodetype],
                         colorscale = self.colorscale,
                         colorbar = colorbar)
-        node_object = Scatter3d(x = self.df['x'],
+        node_object = go.Scatter3d(x = self.df['x'],
                                 y = self.df['y'],
                                 z = self.df['objval'],
                                 mode = 'markers+text',
@@ -207,7 +210,7 @@ class TreeD:
                                 name = 'LP solutions',
                                 visible = True if nodetype == 'age' else False
                                 )
-        proj_object = Scatter3d(x = self.df['x'],
+        proj_object = go.Scatter3d(x = self.df['x'],
                                 y = self.df['y'],
                                 z = self.df['objval'],
                                 mode = 'markers+text',
@@ -224,19 +227,23 @@ class TreeD:
     def draw(self):
         """Draw the tree, depending on the mode"""
 
-        self.generateEdges(separate_frames=False)
+        if not hasattr(self, 'xy'):
+            self.performMDS()
+
+        if not (hasattr(self, 'Xe') and hasattr(self, 'Ye') and hasattr(self, 'Ze')):
+            self._generateEdges(separate_frames=False)
 
         node_object_age, proj_object_age = self._create_nodes_and_projections(nodetype='age')
         node_object_depth, proj_object_depth = self._create_nodes_and_projections(nodetype='depth')
         node_object_cond, proj_object_cond = self._create_nodes_and_projections(nodetype='condition')
 
-        edge_object = Scatter3d(x = self.Xe,
+        edge_object = go.Scatter3d(x = self.Xe,
                                 y = self.Ye,
                                 z = self.Ze,
                                 mode = 'lines',
-                                line = Line(color = 'rgb(75,75,75)',
-                                            width = 2
-                                            ),
+                                line = go.scatter3d.Line(color = 'rgb(75,75,75)',
+                                                    width = 2
+                                                    ),
                                 hoverinfo = 'none',
                                 name = 'edges'
                                 )
@@ -246,25 +253,25 @@ class TreeD:
         min_y = min(self.df['y'])
         max_y = max(self.df['y'])
 
-        optval_object = Scatter3d(x = [min_x, min_x, max_x, max_x, min_x],
+        optval_object = go.Scatter3d(x = [min_x, min_x, max_x, max_x, min_x],
                                     y = [min_y, max_y, max_y, min_y, min_y],
                                     z = [self.optval] * 5,
                                     mode = 'lines',
-                                    line = Line(color = 'rgb(0,200,0)',
-                                                width = 10
-                                                ),
+                                    line = go.scatter3d.Line(color = 'rgb(0,200,0)',
+                                                        width = 10
+                                                        ),
                                     hoverinfo = 'name+z',
                                     name = 'optimal value',
                                     opacity = 0.3
                                     )
 
-        xaxis = XAxis(showticklabels=False, title='X')
-        yaxis = YAxis(showticklabels=False, title='Y')
-        zaxis = ZAxis(title='obj value')
-        scene = Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
+        xaxis = go.layout.scene.XAxis(showticklabels=False, title='X')
+        yaxis = go.layout.scene.YAxis(showticklabels=False, title='Y')
+        zaxis = go.layout.scene.ZAxis(title='obj value')
+        scene = go.layout.Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
         title = 'TreeD for instance '+self.probname+', generated with '+self.scipversion if self.title else ''
 
-        layout = Layout(title=title,
+        layout = go.Layout(title=title,
                         font=dict(size=self.fontsize),
                         autosize=True,
                         # width=900,
@@ -307,11 +314,11 @@ class TreeD:
         # layout['annotations'] = annotations
         layout['updatemenus'] = updatemenus
 
-        data = Data([node_object_age, proj_object_age,
-                        node_object_depth, proj_object_depth,
-                        node_object_cond, proj_object_cond,
-                        edge_object, optval_object])
-        self.fig = Figure(data = data, layout = layout)
+        data = [node_object_age, proj_object_age,
+                node_object_depth, proj_object_depth,
+                node_object_cond, proj_object_cond,
+                edge_object, optval_object]
+        self.fig = go.Figure(data = data, layout = layout)
 
         nicefilename = layout.title.replace(' ', '_')
         nicefilename = nicefilename.replace('"', '')
@@ -323,7 +330,7 @@ class TreeD:
             plot(self.fig, filename = nicefilename + '.html', show_link=False)
 
         # generate html code to include into a website as <div>
-        self.div = plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=True, output_type='div')
+        self.div = plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=self.include_plotlyjs, output_type='div')
 
 
     def main(self):
@@ -343,28 +350,22 @@ class TreeD:
         for setting in self.scip_settings:
             model.setParam(setting[0], setting[1])
 
-        print("solving instance "+self.probname)
         model.optimize()
 
         self.scipversion = 'SCIP '+str(model.version())
-        self.scipversion = self.scipversion[:-1]+'.'+self.scipversion[-1]
+        # self.scipversion = self.scipversion[:-1]+'.'+self.scipversion[-1]
 
         if model.getStatus() == 'optimal':
             self.optval = model.getObjVal()
         else:
             self.optval = None
 
-        print("performing MDS to transform high dimensional LP solutions to 1D/2D")
-        self.performMDS()
 
-        print("performing Spatial Analysis on similarity of LP condition numbers")
-        self.performSpatialAnalysis()
+        # print("performing Spatial Analysis on similarity of LP condition numbers")
+        # self.performSpatialAnalysis()
 
-        print("storing all collected data in a DataFrame")
         columns = self.nodelist[0].keys()
         self.df = pd.DataFrame(self.nodelist, columns = columns)
-        coords = pd.DataFrame(self.xy, columns = ['x', 'y'])
-        self.df = pd.merge(self.df, coords, left_index = True, right_index = True, how = 'outer')
 
 
 if __name__ == "__main__":
