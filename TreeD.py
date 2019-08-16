@@ -4,8 +4,10 @@ import pandas as pd
 import plotly.graph_objs as go
 from plotly.offline import plot, iplot
 from plotly import tools
-import pysal
+# import pysal
 import sys
+import math
+import networkx as nx
 
 
 class LPstatEventhdlr(Eventhdlr):
@@ -35,7 +37,8 @@ class LPstatEventhdlr(Eventhdlr):
         depth = node.getDepth()
 
         age = self.model.getNNodes()
-        condition = self.model.getCondition()
+        condition = math.log10(self.model.getCondition())
+        iters = self.model.getIterations()
         self.nodelist.append({'number': node.getNumber(),
                               'LPsol': LPsol,
                               'objval': objval,
@@ -43,7 +46,8 @@ class LPstatEventhdlr(Eventhdlr):
                               'age': age,
                               'depth':depth,
                               'first': firstlp,
-                              'condition': condition
+                              'condition': condition,
+                              'iterations': iters
                              })
 
     def eventexec(self, event):
@@ -65,7 +69,10 @@ class TreeD:
     a particular instance using spatial dissimilarities of the node LP solutions.
 
     Attributes:
+        scip_settings (list of (str, value)): list of optional SCIP settings to use when solving the instance
         use_iplot (bool): whether to plot inline in a notebook
+        transformation (sr): type of transformation to generate 2D data points ('tsne, 'mds')
+        showcuts (bool): whether to show nodes/solutions that originate from cutting rounds
         color (str): data to use for colorization of nodes ('age', 'depth', 'condition')
         colorscale (str): type of colorization, e.g. 'Viridis', 'Portland'
         colorbar (bool): whether to show the colorbar
@@ -88,12 +95,14 @@ class TreeD:
     def __init__(self):
         self.scip_settings = [('limits/totalnodes', 1000)]
         self.use_iplot = False
+        self.transformation = 'mds'
+        self.showcuts = True
         self.color = 'age'
         self.colorscale = 'Portland'
         self.colorbar = False
         self.title = True
         self.showlegend = True
-        self.fontsize = 'auto'
+        self.fontsize = None
         self.weights = 'knn'
         self.kernelfunction = 'triangular'
         self.knn_k = 2
@@ -101,16 +110,24 @@ class TreeD:
         self.df = None
         self.div = None
         self.include_plotlyjs = True
+        self.nxgraph = nx.Graph()
+        self.stress = None
         self._symbol = []
 
-    def performMDS(self):
-        """compute multidimensional scaling of LP solution values"""
-        df = pd.DataFrame(self.nodelist, columns = ['LPsol'])
-        df = df['LPsol'].apply(pd.Series).fillna(value=0)
-        mds = manifold.MDS(n_components=2, n_init=8, n_jobs=4, max_iter=600, eps=1e-4 )
-        self.xy = mds.fit_transform(df)
-        coords = pd.DataFrame(self.xy, columns = ['x', 'y'])
-        self.df = pd.merge(self.df, coords, left_index = True, right_index = True, how = 'outer')
+    def transform(self):
+        """compute transformations of LP solutions into 2-dimensional space"""
+        # df = pd.DataFrame(self.nodelist, columns = ['LPsol'])
+        df = self.df['LPsol'].apply(pd.Series).fillna(value=0)
+        if self.transformation == 'mds':
+            mf = manifold.MDS(n_components=2)
+        elif self.transformation == 'tsne':
+            mf = manifold.TSNE(n_components=2)
+        self.xy = mf.fit_transform(df)
+        self.stress = mf.stress_
+
+        self.df['x'] = self.xy[:,0]
+        self.df['y'] = self.xy[:,1]
+        self._generateEdges()
 
     def performSpatialAnalysis(self):
         """compute spatial correlation between LP solutions and their condition numbers"""
@@ -135,27 +152,37 @@ class TreeD:
         Ze = []
 
         if not separate_frames:
-            for index, curr in self.df.iterrows():
-                if curr['first']:
+            if self.showcuts:
+                self.nxgraph.add_nodes_from(range(len(self.df)))
+                for index, curr in self.df.iterrows():
+                    if curr['first']:
+                        self._symbol += ['circle']
+                        # skip root node
+                        if curr['number'] == 1:
+                            continue
+                        # found first LP solution of a new child node
+                        # parent is last LP of parent node
+                        parent = self.df[self.df['number'] == curr['parent']].iloc[-1]
+                    else:
+                        # found an improving LP solution at the same node as before
+                        self._symbol += ['diamond']
+                        parent = self.df.iloc[index - 1]
+
+                    Xe += [float(parent['x']), curr['x'], None]
+                    Ye += [float(parent['y']), curr['y'], None]
+                    Ze += [float(parent['objval']), curr['objval'], None]
+                    self.nxgraph.add_edge(parent.name, curr.name)
+            else:
+                self.nxgraph.add_nodes_from(list(self.df['number']))
+                for index, curr in self.df.iterrows():
                     self._symbol += ['circle']
-                    # skip root node
                     if curr['number'] == 1:
                         continue
-                    # found first LP solution of a new child node
-                    # parent is last LP of parent node
-                    parent = self.df[self.df['number'] == curr['parent']].iloc[-1]
-                    # mark endpoint of branch for previous node
-                    Xe += [None]
-                    Ye += [None]
-                    Ze += [None]
-                else:
-                    # found an improving LP solution at the same node as before
-                    self._symbol += ['diamond']
-                    parent = self.df.iloc[index - 1]
-
-                Xe += [float(parent['x']), curr['x']]
-                Ye += [float(parent['y']), curr['y']]
-                Ze += [float(parent['objval']), curr['objval']]
+                    parent = self.df[self.df['number'] == curr['parent']]
+                    Xe += [float(parent['x']), curr['x'], None]
+                    Ye += [float(parent['y']), curr['y'], None]
+                    Ze += [float(parent['objval']), curr['objval'], None]
+                    self.nxgraph.add_edge(parent.iloc[0]['number'], curr['number'])
 
         else:
             max_age = self.df['age'].max()
@@ -173,17 +200,14 @@ class TreeD:
                         # found first LP solution of a new child node
                         # parent is last LP of parent node
                         parent = self.df[self.df['number'] == curr['parent']].iloc[-1]
-                        Xe_ += [None]
-                        Ye_ += [None]
-                        Ze_ += [None]
                     else:
                         # found an improving LP solution at the same node as before
                         self._symbol += ['diamond']
                         parent = self.df.iloc[index - 1]
 
-                    Xe_ += [float(parent['x']), curr['x']]
-                    Ye_ += [float(parent['y']), curr['y']]
-                    Ze_ += [float(parent['objval']), curr['objval']]
+                    Xe_ += [float(parent['x']), curr['x'], None]
+                    Ye_ += [float(parent['y']), curr['y'], None]
+                    Ze_ += [float(parent['objval']), curr['objval'], None]
                 Xe.append(Xe_)
                 Ye.append(Ye_)
                 Ze.append(Ze_)
@@ -193,9 +217,9 @@ class TreeD:
         self.Ze = Ze
 
     def _create_nodes_and_projections(self, nodetype='age'):
-        colorbar = go.scatter3d.marker.ColorBar(title=nodetype[0].upper()+nodetype[1:], thickness=10, x=0)
+        colorbar = go.scatter3d.marker.ColorBar(title=nodetype.capitalize(), thickness=10, x=0)
         marker = go.scatter3d.Marker(symbol = self._symbol,
-                        size = 4,
+                        size = 5,
                         color = self.df[nodetype],
                         colorscale = self.colorscale,
                         colorbar = colorbar)
@@ -227,15 +251,12 @@ class TreeD:
     def draw(self):
         """Draw the tree, depending on the mode"""
 
-        if not hasattr(self, 'xy'):
-            self.performMDS()
-
-        if not (hasattr(self, 'Xe') and hasattr(self, 'Ye') and hasattr(self, 'Ze')):
-            self._generateEdges(separate_frames=False)
+        self.transform()
 
         node_object_age, proj_object_age = self._create_nodes_and_projections(nodetype='age')
         node_object_depth, proj_object_depth = self._create_nodes_and_projections(nodetype='depth')
         node_object_cond, proj_object_cond = self._create_nodes_and_projections(nodetype='condition')
+        node_object_iter, proj_object_iter = self._create_nodes_and_projections(nodetype='iterations')
 
         edge_object = go.Scatter3d(x = self.Xe,
                                 y = self.Ye,
@@ -267,7 +288,7 @@ class TreeD:
 
         xaxis = go.layout.scene.XAxis(showticklabels=False, title='X')
         yaxis = go.layout.scene.YAxis(showticklabels=False, title='Y')
-        zaxis = go.layout.scene.ZAxis(title='obj value')
+        zaxis = go.layout.scene.ZAxis(title='objective value')
         scene = go.layout.Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
         title = 'TreeD for instance '+self.probname+', generated with '+self.scipversion if self.title else ''
 
@@ -285,18 +306,23 @@ class TreeD:
             dict(
                 buttons=list([
                     dict(
-                        args=['visible', [True, True, False, False, False, False, True, True]],
+                        args=['visible', [True, True, False, False, False, False, False, False, True, True]],
                         label='Node Age',
                         method='restyle'
                     ),
                     dict(
-                        args=['visible', [False, False, True, True, False, False, True, True]],
+                        args=['visible', [False, False, True, True, False, False, False, False, True, True]],
                         label='Tree Depth',
                         method='restyle'
                     ),
                     dict(
-                        args=['visible', [False, False, False, False, True, True, True, True]],
-                        label='LP Condition',
+                        args=['visible', [False, False, False, False, True, True, False, False, True, True]],
+                        label='LP Condition (log 10)',
+                        method='restyle'
+                    ),
+                    dict(
+                        args=['visible', [False, False, False, False, False, False, True, True, True, True]],
+                        label='LP Iterations',
                         method='restyle'
                     )
                 ]),
@@ -317,16 +343,15 @@ class TreeD:
         data = [node_object_age, proj_object_age,
                 node_object_depth, proj_object_depth,
                 node_object_cond, proj_object_cond,
+                node_object_iter, proj_object_iter,
                 edge_object, optval_object]
-        self.fig = go.Figure(data = data, layout = layout)
+        self.fig = go.FigureWidget(data = data, layout = layout)
 
-        nicefilename = layout.title.replace(' ', '_')
+        nicefilename = layout.title.text.replace(' ', '_')
         nicefilename = nicefilename.replace('"', '')
         nicefilename = nicefilename.replace(',', '')
 
-        if self.use_iplot:
-            iplot(self.fig, filename = layout.title.replace(' ', '_'))
-        else:
+        if not self.use_iplot:
             plot(self.fig, filename = nicefilename + '.html', show_link=False)
 
         # generate html code to include into a website as <div>
@@ -367,6 +392,29 @@ class TreeD:
         columns = self.nodelist[0].keys()
         self.df = pd.DataFrame(self.nodelist, columns = columns)
 
+        # merge solutions from cutting rounds into one node
+        if not self.showcuts:
+            self.df = self.df[self.df['first'] == False].drop_duplicates(subset='age', keep='last').reset_index()
+
+    def compute_distances(self):
+        """compute all pairwise distances between the original LP solutions and the transformed points"""
+        if self.df is None:
+            return
+
+        self.origdist = []
+        self.transdist = []
+        for i in range(len(self.df)):
+            for j in range(i+1, len(self.df)):
+                self.origdist.append(distance(self.df['LPsol'].iloc[i], self.df['LPsol'].iloc[j]))
+                self.transdist.append(distance(self.df[['x', 'y']].iloc[i], self.df[['x', 'y']].iloc[j]))
+
+
+def distance(p1, p2):
+    """euclidean distance between two coordinates (dict-like storage)"""
+    dist = 0
+    for k in set([*p1.keys(), *p2.keys()]):
+        dist += (p1.get(k, 0) - p2.get(k, 0))**2
+    return math.sqrt(dist)
 
 if __name__ == "__main__":
 
