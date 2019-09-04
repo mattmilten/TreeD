@@ -38,7 +38,7 @@ class LPstatEventhdlr(Eventhdlr):
 
         age = self.model.getNNodes()
         condition = math.log10(self.model.getCondition())
-        iters = self.model.getIterations()
+        iters = self.model.lpiGetIterations()
         self.nodelist.append({'number': node.getNumber(),
                               'LPsol': LPsol,
                               'objval': objval,
@@ -79,6 +79,7 @@ class TreeD:
         title (bool): show/hide title of the plot
         showlegend (bool): show/hide logend of the plot
         fontsize (str): fixed fontsize or 'auto'
+        nodesize (int): size of tree nodes
         weights (str): type of weights for pysal, e.g. 'knn'
         kernelfunction (str): type of kernelfunction for distance metrics, e.g. 'triangular'
         knn_k (int): number of k-nearest neighbors
@@ -103,6 +104,7 @@ class TreeD:
         self.title = True
         self.showlegend = True
         self.fontsize = None
+        self.nodesize = 5
         self.weights = 'knn'
         self.kernelfunction = 'triangular'
         self.knn_k = 2
@@ -219,7 +221,7 @@ class TreeD:
     def _create_nodes_and_projections(self, nodetype='age'):
         colorbar = go.scatter3d.marker.ColorBar(title=nodetype.capitalize(), thickness=10, x=0)
         marker = go.scatter3d.Marker(symbol = self._symbol,
-                        size = 5,
+                        size = self.nodesize,
                         color = self.df[nodetype],
                         colorscale = self.colorscale,
                         colorbar = colorbar)
@@ -286,9 +288,9 @@ class TreeD:
                                     opacity = 0.3
                                     )
 
-        xaxis = go.layout.scene.XAxis(showticklabels=False, title='X')
-        yaxis = go.layout.scene.YAxis(showticklabels=False, title='Y')
-        zaxis = go.layout.scene.ZAxis(title='objective value')
+        xaxis = go.layout.scene.XAxis(showticklabels=False, title='X', backgroundcolor='white', gridcolor='lightgray')
+        yaxis = go.layout.scene.YAxis(showticklabels=False, title='Y', backgroundcolor='white', gridcolor='lightgray')
+        zaxis = go.layout.scene.ZAxis(title='objective value', backgroundcolor='white', gridcolor='lightgray')
         scene = go.layout.Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
         title = 'TreeD for instance '+self.probname+', generated with '+self.scipversion if self.title else ''
 
