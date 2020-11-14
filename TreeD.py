@@ -29,7 +29,7 @@ class LPstatEventhdlr(Eventhdlr):
             if abs(solval) > 1e-6:
                 LPsol[var.name] = self.model.getSolVal(None, var)
         node = self.model.getCurrentNode()
-        if node.getNumber() is not 1:
+        if node.getNumber() != 1:
             parentnode = node.getParent()
             parent = parentnode.getNumber()
         else:
@@ -111,7 +111,7 @@ class TreeD:
         self.fig = None
         self.df = None
         self.div = None
-        self.include_plotlyjs = True
+        self.include_plotlyjs = 'cdn'
         self.nxgraph = nx.Graph()
         self.stress = None
         self._symbol = []
@@ -120,10 +120,10 @@ class TreeD:
         """compute transformations of LP solutions into 2-dimensional space"""
         # df = pd.DataFrame(self.nodelist, columns = ['LPsol'])
         df = self.df['LPsol'].apply(pd.Series).fillna(value=0)
-        if self.transformation == 'mds':
-            mf = manifold.MDS(n_components=2)
-        elif self.transformation == 'tsne':
+        if self.transformation == 'tsne':
             mf = manifold.TSNE(n_components=2)
+        else:
+            mf = manifold.MDS(n_components=2) 
         self.xy = mf.fit_transform(df)
         self.stress = mf.stress_
 
@@ -280,19 +280,19 @@ class TreeD:
                                     y = [min_y, max_y, max_y, min_y, min_y],
                                     z = [self.optval] * 5,
                                     mode = 'lines',
-                                    line = go.scatter3d.Line(color = 'rgb(0,200,0)',
-                                                        width = 10
+                                    line = go.scatter3d.Line(color = 'rgb(0,200,50)',
+                                                        width = 5
                                                         ),
                                     hoverinfo = 'name+z',
                                     name = 'optimal value',
-                                    opacity = 0.3
+                                    opacity = 0.5
                                     )
 
         xaxis = go.layout.scene.XAxis(showticklabels=False, title='X', backgroundcolor='white', gridcolor='lightgray')
         yaxis = go.layout.scene.YAxis(showticklabels=False, title='Y', backgroundcolor='white', gridcolor='lightgray')
         zaxis = go.layout.scene.ZAxis(title='objective value', backgroundcolor='white', gridcolor='lightgray')
         scene = go.layout.Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
-        title = 'TreeD for instance '+self.probname+', generated with '+self.scipversion if self.title else ''
+        title = 'TreeD of '+self.probname+', generated with '+self.scipversion if self.title else ''
 
         layout = go.Layout(title=title,
                         font=dict(size=self.fontsize),
@@ -347,14 +347,14 @@ class TreeD:
                 node_object_cond, proj_object_cond,
                 node_object_iter, proj_object_iter,
                 edge_object, optval_object]
-        self.fig = go.FigureWidget(data = data, layout = layout)
+        self.fig = go.Figure(data = data, layout = layout)
 
         nicefilename = layout.title.text.replace(' ', '_')
         nicefilename = nicefilename.replace('"', '')
         nicefilename = nicefilename.replace(',', '')
 
         if not self.use_iplot:
-            plot(self.fig, filename = nicefilename + '.html', show_link=False)
+            plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=self.include_plotlyjs)
 
         # generate html code to include into a website as <div>
         self.div = plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=self.include_plotlyjs, output_type='div')
