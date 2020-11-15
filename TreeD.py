@@ -153,12 +153,14 @@ class TreeD:
         Ye = []
         Ze = []
 
+        symbol = []
+
         if not separate_frames:
             if self.showcuts:
                 self.nxgraph.add_nodes_from(range(len(self.df)))
                 for index, curr in self.df.iterrows():
                     if curr['first']:
-                        self._symbol += ['circle']
+                        symbol += ['circle']
                         # skip root node
                         if curr['number'] == 1:
                             continue
@@ -167,7 +169,7 @@ class TreeD:
                         parent = self.df[self.df['number'] == curr['parent']].iloc[-1]
                     else:
                         # found an improving LP solution at the same node as before
-                        self._symbol += ['diamond']
+                        symbol += ['diamond']
                         parent = self.df.iloc[index - 1]
 
                     Xe += [float(parent['x']), curr['x'], None]
@@ -177,7 +179,7 @@ class TreeD:
             else:
                 self.nxgraph.add_nodes_from(list(self.df['number']))
                 for index, curr in self.df.iterrows():
-                    self._symbol += ['circle']
+                    symbol += ['circle']
                     if curr['number'] == 1:
                         continue
                     parent = self.df[self.df['number'] == curr['parent']]
@@ -195,7 +197,7 @@ class TreeD:
                 Ze_ = []
                 for index, curr in tmp.iterrows():
                     if curr['first']:
-                        self._symbol += ['circle']
+                        symbol += ['circle']
                         # skip root node
                         if curr['number'] == 1:
                             continue
@@ -204,7 +206,7 @@ class TreeD:
                         parent = self.df[self.df['number'] == curr['parent']].iloc[-1]
                     else:
                         # found an improving LP solution at the same node as before
-                        self._symbol += ['diamond']
+                        symbol += ['diamond']
                         parent = self.df.iloc[index - 1]
 
                     Xe_ += [float(parent['x']), curr['x'], None]
@@ -214,15 +216,16 @@ class TreeD:
                 Ye.append(Ye_)
                 Ze.append(Ze_)
 
+        self.df['symbol'] = symbol
         self.Xe = Xe
         self.Ye = Ye
         self.Ze = Ze
 
-    def _create_nodes_and_projections(self, nodetype='age'):
-        colorbar = go.scatter3d.marker.ColorBar(title=nodetype.capitalize(), thickness=10, x=0)
-        marker = go.scatter3d.Marker(symbol = self._symbol,
+    def _create_nodes_and_projections(self):
+        colorbar = go.scatter3d.marker.ColorBar(title='', thickness=10, x=0)
+        marker = go.scatter3d.Marker(symbol = self.df['symbol'],
                         size = self.nodesize,
-                        color = self.df[nodetype],
+                        color = self.df['age'],
                         colorscale = self.colorscale,
                         colorbar = colorbar)
         node_object = go.Scatter3d(x = self.df['x'],
@@ -231,10 +234,10 @@ class TreeD:
                                 mode = 'markers+text',
                                 marker = marker,
                                 hovertext = self.df['number'],
+                                hovertemplate = 'LP obj: %{z}<br>node number: %{hovertext}<br>%{marker.color}',
                                 hoverinfo = 'z+text+name',
                                 opacity = 0.7,
-                                name = 'LP solutions',
-                                visible = True if nodetype == 'age' else False
+                                name = 'LP solutions'                                
                                 )
         proj_object = go.Scatter3d(x = self.df['x'],
                                 y = self.df['y'],
@@ -246,7 +249,7 @@ class TreeD:
                                 opacity = 0.0,
                                 projection = dict(z = dict(show = True)),
                                 name = 'projection of LP solutions',
-                                visible = True if nodetype == 'age' else False
+                                visible=False
                                 )
         return node_object, proj_object
 
@@ -255,12 +258,9 @@ class TreeD:
 
         self.transform()
 
-        node_object_age, proj_object_age = self._create_nodes_and_projections(nodetype='age')
-        node_object_depth, proj_object_depth = self._create_nodes_and_projections(nodetype='depth')
-        node_object_cond, proj_object_cond = self._create_nodes_and_projections(nodetype='condition')
-        node_object_iter, proj_object_iter = self._create_nodes_and_projections(nodetype='iterations')
+        nodes, nodeprojs = self._create_nodes_and_projections()
 
-        edge_object = go.Scatter3d(x = self.Xe,
+        edges = go.Scatter3d(x = self.Xe,
                                 y = self.Ye,
                                 z = self.Ze,
                                 mode = 'lines',
@@ -276,7 +276,7 @@ class TreeD:
         min_y = min(self.df['y'])
         max_y = max(self.df['y'])
 
-        optval_object = go.Scatter3d(x = [min_x, min_x, max_x, max_x, min_x],
+        optval = go.Scatter3d(x = [min_x, min_x, max_x, max_x, min_x],
                                     y = [min_y, max_y, max_y, min_y, min_y],
                                     z = [self.optval] * 5,
                                     mode = 'lines',
@@ -308,22 +308,22 @@ class TreeD:
             dict(
                 buttons=list([
                     dict(
-                        args=['visible', [True, True, False, False, False, False, False, False, True, True]],
+                        args=['marker.color', [self.df['age']]],
                         label='Node Age',
                         method='restyle'
                     ),
                     dict(
-                        args=['visible', [False, False, True, True, False, False, False, False, True, True]],
+                        args=['marker.color', [self.df['depth']]],
                         label='Tree Depth',
                         method='restyle'
                     ),
                     dict(
-                        args=['visible', [False, False, False, False, True, True, False, False, True, True]],
+                        args=['marker.color', [self.df['condition']]],
                         label='LP Condition (log 10)',
                         method='restyle'
                     ),
                     dict(
-                        args=['visible', [False, False, False, False, False, False, True, True, True, True]],
+                        args=['marker.color', [self.df['iterations']]],
                         label='LP Iterations',
                         method='restyle'
                     )
@@ -336,18 +336,9 @@ class TreeD:
             ),
         ])
 
-        # annotations = list([
-        #     dict(text='Color Mode:', showarrow=False, x=1.2, y=0.6, )
-        # ])
-        # layout['annotations'] = annotations
         layout['updatemenus'] = updatemenus
 
-        data = [node_object_age, proj_object_age,
-                node_object_depth, proj_object_depth,
-                node_object_cond, proj_object_cond,
-                node_object_iter, proj_object_iter,
-                edge_object, optval_object]
-        self.fig = go.Figure(data = data, layout = layout)
+        self.fig = go.Figure(data = [nodes, nodeprojs, edges, optval], layout = layout)
 
         nicefilename = layout.title.text.replace(' ', '_')
         nicefilename = nicefilename.replace('"', '')
