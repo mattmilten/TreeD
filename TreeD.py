@@ -1,13 +1,10 @@
-from pyscipopt import Model, Eventhdlr, quicksum, SCIP_EVENTTYPE
+from pyscipopt import Model, Eventhdlr, SCIP_EVENTTYPE
 from sklearn import manifold
 import pandas as pd
 import plotly.graph_objs as go
-from plotly.offline import plot, iplot
-from plotly import tools
-# import pysal
+import networkx as nx
 import sys
 import math
-import networkx as nx
 
 
 class LPstatEventhdlr(Eventhdlr):
@@ -70,7 +67,6 @@ class TreeD:
 
     Attributes:
         scip_settings (list of (str, value)): list of optional SCIP settings to use when solving the instance
-        use_iplot (bool): whether to plot inline in a notebook
         transformation (sr): type of transformation to generate 2D data points ('tsne, 'mds')
         showcuts (bool): whether to show nodes/solutions that originate from cutting rounds
         color (str): data to use for colorization of nodes ('age', 'depth', 'condition')
@@ -94,8 +90,7 @@ class TreeD:
     """
 
     def __init__(self):
-        self.scip_settings = [('limits/totalnodes', 1000)]
-        self.use_iplot = False
+        self.scip_settings = [('limits/totalnodes', 500)]
         self.transformation = 'mds'
         self.showcuts = True
         self.color = 'age'
@@ -133,6 +128,8 @@ class TreeD:
 
     def performSpatialAnalysis(self):
         """compute spatial correlation between LP solutions and their condition numbers"""
+        import pysal
+        
         df = pd.DataFrame(self.nodelist, columns = ['LPsol', 'condition'])
         lpsols = df['LPsol'].apply(pd.Series).fillna(value=0)
         if self.weights == 'kernel':
@@ -292,7 +289,7 @@ class TreeD:
         yaxis = go.layout.scene.YAxis(showticklabels=False, title='Y', backgroundcolor='white', gridcolor='lightgray')
         zaxis = go.layout.scene.ZAxis(title='objective value', backgroundcolor='white', gridcolor='lightgray')
         scene = go.layout.Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
-        title = 'TreeD of '+self.probname+', generated with '+self.scipversion if self.title else ''
+        title = 'TreeD of '+self.probname+', using '+self.scipversion if self.title else ''
 
         layout = go.Layout(title=title,
                         font=dict(size=self.fontsize),
@@ -344,11 +341,12 @@ class TreeD:
         nicefilename = nicefilename.replace('"', '')
         nicefilename = nicefilename.replace(',', '')
 
-        if not self.use_iplot:
-            plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=self.include_plotlyjs)
+        self.fig.write_html(file = nicefilename + '.html', include_plotlyjs=self.include_plotlyjs)
 
         # generate html code to include into a website as <div>
-        self.div = plot(self.fig, filename = nicefilename + '.html', show_link=False, include_plotlyjs=self.include_plotlyjs, output_type='div')
+        self.div = self.fig.write_html(file = nicefilename + '.html', include_plotlyjs=self.include_plotlyjs, full_html=False)
+
+        return self.fig
 
 
     def main(self):
