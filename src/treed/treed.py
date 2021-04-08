@@ -93,11 +93,11 @@ class TreeD:
      - pandas to organize the collected data
     """
 
-    def __init__(self, probpath=""):
-        self.probpath = probpath
-        self.scip_settings = [("limits/totalnodes", 500)]
-        self.transformation = "mds"
-        self.showcuts = True
+    def __init__(self, **kwargs):
+        self.probpath = kwargs.get("probpath", "")
+        self.scip_settings = [("limits/totalnodes", kwargs.get("nodelimit", 500))]
+        self.transformation = kwargs.get("transformation", "mds")
+        self.showcuts = kwargs.get("showcuts", True)
         self.color = "age"
         self.colorscale = "Portland"
         self.colorbar = False
@@ -440,14 +440,3 @@ def distance(p1, p2):
         dist += (p1.get(k, 0) - p2.get(k, 0)) ** 2
     return math.sqrt(dist)
 
-
-if __name__ == "__main__":
-
-    treed = TreeD()
-    if len(sys.argv) == 1:
-        print(treed.__doc__)
-        print("usage: {} <MIP-instance>".format(sys.argv[0]))
-    else:
-        treed.probpath = sys.argv[1]
-        treed.main()
-        treed.draw()
