@@ -122,10 +122,16 @@ class TreeD:
         df = self.df["LPsol"].apply(pd.Series).fillna(value=0)
         if self.transformation == "tsne":
             mf = manifold.TSNE(n_components=2)
+        elif self.transformation == "lle":
+            mf = manifold.LocallyLinearEmbedding(n_components=2)
+        elif self.transformation == "ltsa":
+            mf = manifold.LocallyLinearEmbedding(n_components=2, method="ltsa")
+        elif self.transformation == "spectral":
+            mf = manifold.SpectralEmbedding(n_components=2)
         else:
             mf = manifold.MDS(n_components=2)
         self.xy = mf.fit_transform(df)
-        self.stress = mf.stress_
+        # self.stress = mf.stress_  # no available with all transformations
 
         self.df["x"] = self.xy[:, 0]
         self.df["y"] = self.xy[:, 1]
@@ -259,12 +265,68 @@ class TreeD:
         )
         return node_object, proj_object
 
+    def _create_nodes_frames(self):
+        colorbar = go.scatter3d.marker.ColorBar(title="", thickness=10, x=0)
+        marker = go.scatter3d.Marker(
+            symbol=self.df["symbol"],
+            size=self.nodesize,
+            color=self.df["age"],
+            colorscale=self.colorscale,
+            colorbar=colorbar,
+        )
+
+        frames = []
+        sliders_dict = dict(
+            active=0,
+            yanchor="top",
+            xanchor="left",
+            currentvalue={"prefix": "Age:", "visible": True, "xanchor": "right",},
+            len=0.9,
+            x=0.05,
+            y=0.1,
+            steps=[],
+        )
+
+        for a in self.df["age"]:
+            adf = self.df[self.df["age"] <= a]
+            node_object = go.Scatter3d(
+                x=adf["x"],
+                y=adf["y"],
+                z=adf["objval"],
+                mode="markers+text",
+                marker=marker,
+                hovertext=adf["number"],
+                hovertemplate="LP obj: %{z}<br>node number: %{hovertext}<br>%{marker.color}",
+                hoverinfo="z+text+name",
+                opacity=0.7,
+                name="LP solutions",
+            )
+            frames.append(go.Frame(data=node_object, name=str(a)))
+
+            slider_step = {
+                "args": [
+                    [a],
+                    {
+                        "frame": {"redraw": True, "restyle": False},
+                        "fromcurrent": True,
+                        "mode": "immediate",
+                    },
+                ],
+                "label": a,
+                "method": "animate",
+            }
+            sliders_dict["steps"].append(slider_step)
+
+        return frames, sliders_dict
+
     def draw(self):
         """Draw the tree, depending on the mode"""
 
         self.transform()
 
         nodes, nodeprojs = self._create_nodes_and_projections()
+
+        frames, sliders = self._create_nodes_frames()
 
         edges = go.Scatter3d(
             x=self.Xe,
@@ -324,45 +386,104 @@ class TreeD:
             scene=scene,
         )
 
-        updatemenus = list(
+        layout["updatemenus"] = list(
             [
                 dict(
                     buttons=list(
                         [
                             dict(
-                                args=["marker.color", [self.df["age"]]],
                                 label="Node Age",
                                 method="restyle",
+                                args=[
+                                    {
+                                        "marker.color": [self.df["age"]],
+                                        "marker.cauto": min(self.df["age"]),
+                                        "marker.cmax": max(self.df["age"]),
+                                    }
+                                ],
                             ),
                             dict(
-                                args=["marker.color", [self.df["depth"]]],
                                 label="Tree Depth",
                                 method="restyle",
+                                args=[
+                                    {
+                                        "marker.color": [self.df["depth"]],
+                                        "marker.cauto": min(self.df["depth"]),
+                                        "marker.cmax": max(self.df["depth"]),
+                                    }
+                                ],
                             ),
                             dict(
-                                args=["marker.color", [self.df["condition"]]],
                                 label="LP Condition (log 10)",
                                 method="restyle",
+                                args=[
+                                    {
+                                        "marker.color": [self.df["condition"]],
+                                        "marker.cmin": 1,
+                                        "marker.cmax": 20,
+                                    }
+                                ],
                             ),
                             dict(
-                                args=["marker.color", [self.df["iterations"]]],
                                 label="LP Iterations",
                                 method="restyle",
+                                args=[
+                                    {
+                                        "marker.color": [self.df["iterations"]],
+                                        "marker.cauto": min(self.df["iterations"]),
+                                        "marker.cmax": max(self.df["iterations"]),
+                                    }
+                                ],
                             ),
                         ]
                     ),
                     direction="down",
                     showactive=True,
                     type="buttons",
-                    # x = 1.2,
-                    # y = 0.6,
+                ),
+                dict(
+                    buttons=list(
+                        [
+                            dict(
+                                label="▶",
+                                method="animate",
+                                args=[
+                                    None,
+                                    {
+                                        "frame": {
+                                            "duration": 50,
+                                            "redraw": True,
+                                        },
+                                        "fromcurrent": True,
+                                    },
+                                ],
+                                args2=[
+                                    [None],
+                                    {
+                                        "frame": {"duration": 0, "redraw": False},
+                                        "mode": "immediate",
+                                        "transition": {"duration": 0},
+                                    },
+                                ],
+                            )
+                        ]
+                    ),
+                    direction="left",
+                    yanchor="top",
+                    xanchor="right",
+                    showactive=True,
+                    type="buttons",
+                    x=0,
+                    y=0,
                 ),
             ]
         )
 
-        layout["updatemenus"] = updatemenus
+        layout["sliders"] = [sliders]
 
-        self.fig = go.Figure(data=[nodes, nodeprojs, edges, optval], layout=layout)
+        self.fig = go.Figure(
+            data=[nodes, nodeprojs, edges, optval], layout=layout, frames=frames,
+        )
 
         self.fig.write_html(file=filename, include_plotlyjs=self.include_plotlyjs)
 
@@ -373,7 +494,7 @@ class TreeD:
 
         return self.fig
 
-    def main(self):
+    def solve(self):
         """Solve the instance and collect and generate the tree data"""
 
         self.nodelist = []

@@ -36,5 +36,5 @@ treed = TreeD(
     nodelimit=args.nodelimit,
 )
 
-treed.main()
+treed.solve()
 treed.draw()
