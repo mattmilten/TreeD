@@ -13,14 +13,18 @@ parser.add_argument("model", type=str, help="path to model")
 parser.add_argument(
     "--transformation",
     "-t",
-    type=str,
+    choices=["mds", "tsne", "lle", "spectral", "ltsa"],
     default="mds",
-    help="2D transformation algorithm for node LP solutions ('mds' or 'tsne')",
+    help="2D transformation algorithm for node LP solutions",
 )
 parser.add_argument(
     "--hidecuts",
     action="store_true",
     help="hide cutting rounds and only show final node LP solutions",
+)
+
+parser.add_argument(
+    "--quiet", action="store_true", help="hide solving and progress output",
 )
 
 parser.add_argument(
@@ -34,6 +38,7 @@ treed = TreeD(
     transformation=args.transformation,
     showcuts=~args.hidecuts,
     nodelimit=args.nodelimit,
+    verbose=~args.quiet,
 )
 
 treed.solve()

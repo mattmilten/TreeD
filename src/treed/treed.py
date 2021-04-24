@@ -3,9 +3,9 @@ from sklearn import manifold
 import pandas as pd
 import plotly.graph_objs as go
 import networkx as nx
-import sys
 import os
 import math
+from time import time
 
 
 class LPstatEventhdlr(Eventhdlr):
@@ -53,9 +53,9 @@ class LPstatEventhdlr(Eventhdlr):
 
     def eventexec(self, event):
         if event.getType() == SCIP_EVENTTYPE.FIRSTLPSOLVED:
-            self.collectNodeInfo(True)
+            self.collectNodeInfo(firstlp=True)
         elif event.getType() == SCIP_EVENTTYPE.LPSOLVED:
-            self.collectNodeInfo(False)
+            self.collectNodeInfo(firstlp=False)
         else:
             print("unexpected event:" + str(event))
         return {}
@@ -98,6 +98,7 @@ class TreeD:
         self.scip_settings = [("limits/totalnodes", kwargs.get("nodelimit", 500))]
         self.transformation = kwargs.get("transformation", "mds")
         self.showcuts = kwargs.get("showcuts", True)
+        self.verbose = kwargs.get("verbose", True)
         self.color = "age"
         self.colorscale = "Portland"
         self.colorbar = False
@@ -130,12 +131,19 @@ class TreeD:
             mf = manifold.SpectralEmbedding(n_components=2)
         else:
             mf = manifold.MDS(n_components=2)
-        self.xy = mf.fit_transform(df)
-        # self.stress = mf.stress_  # no available with all transformations
 
-        self.df["x"] = self.xy[:, 0]
-        self.df["y"] = self.xy[:, 1]
-        self._generateEdges()
+        if self.verbose:
+            print("transforming LP solutions", end="...")
+            start = time()
+        start = time()
+        xy = mf.fit_transform(df)
+        if self.verbose:
+            print(f"✔, time: {time()-start:.2f} seconds")
+
+        # self.stress = mf.stress_  # not available with all transformations
+
+        self.df["x"] = xy[:, 0]
+        self.df["y"] = xy[:, 1]
 
     def performSpatialAnalysis(self):
         """compute spatial correlation between LP solutions and their condition numbers"""
@@ -324,8 +332,11 @@ class TreeD:
 
         self.transform()
 
+        if self.verbose:
+            print("generating 3D objects", end="...")
+            start = time()
+        self._generateEdges()
         nodes, nodeprojs = self._create_nodes_and_projections()
-
         frames, sliders = self._create_nodes_frames()
 
         edges = go.Scatter3d(
@@ -450,10 +461,7 @@ class TreeD:
                                 args=[
                                     None,
                                     {
-                                        "frame": {
-                                            "duration": 50,
-                                            "redraw": True,
-                                        },
+                                        "frame": {"duration": 50, "redraw": True,},
                                         "fromcurrent": True,
                                     },
                                 ],
@@ -488,9 +496,12 @@ class TreeD:
         self.fig.write_html(file=filename, include_plotlyjs=self.include_plotlyjs)
 
         # generate html code to include into a website as <div>
-        self.div = self.fig.write_html(
-            file=filename, include_plotlyjs=self.include_plotlyjs, full_html=False
-        )
+        # self.div = self.fig.write_html(
+        #     file=filename, include_plotlyjs=self.include_plotlyjs, full_html=False
+        # )
+
+        if self.verbose:
+            print(f"✔, time: {time()-start:.2f} seconds")
 
         return self.fig
 
@@ -502,6 +513,10 @@ class TreeD:
         self.probname = os.path.splitext(os.path.basename(self.probpath))[0]
 
         model = Model("TreeD")
+
+        if not self.verbose:
+            model.hideOutput()
+
         eventhdlr = LPstatEventhdlr()
         eventhdlr.nodelist = self.nodelist
         model.includeEventhdlr(
@@ -513,7 +528,16 @@ class TreeD:
         for setting in self.scip_settings:
             model.setParam(setting[0], setting[1])
 
-        model.optimize()
+        if self.verbose:
+            print("optimizing problem", end="... ")
+            start = time()
+        try:
+            model.optimize()
+        except:
+            print("optimization failed")
+
+        if self.verbose:
+            print(f"{model.getStatus()}, time: {time()-start:.2f} seconds")
 
         self.scipversion = "SCIP " + str(model.version())
         # self.scipversion = self.scipversion[:-1]+'.'+self.scipversion[-1]
@@ -547,17 +571,18 @@ class TreeD:
         for i in range(len(self.df)):
             for j in range(i + 1, len(self.df)):
                 self.origdist.append(
-                    distance(self.df["LPsol"].iloc[i], self.df["LPsol"].iloc[j])
+                    self.distance(self.df["LPsol"].iloc[i], self.df["LPsol"].iloc[j])
                 )
                 self.transdist.append(
-                    distance(self.df[["x", "y"]].iloc[i], self.df[["x", "y"]].iloc[j])
+                    self.distance(
+                        self.df[["x", "y"]].iloc[i], self.df[["x", "y"]].iloc[j]
+                    )
                 )
 
-
-def distance(p1, p2):
-    """euclidean distance between two coordinates (dict-like storage)"""
-    dist = 0
-    for k in set([*p1.keys(), *p2.keys()]):
-        dist += (p1.get(k, 0) - p2.get(k, 0)) ** 2
-    return math.sqrt(dist)
+    def distance(p1, p2):
+        """euclidean distance between two coordinates (dict-like storage)"""
+        dist = 0
+        for k in set([*p1.keys(), *p2.keys()]):
+            dist += (p1.get(k, 0) - p2.get(k, 0)) ** 2
+        return math.sqrt(dist)
 
