@@ -11,6 +11,11 @@ parser = argparse.ArgumentParser(description=desc)
 
 parser.add_argument("model", type=str, help="path to model")
 parser.add_argument(
+    "--classic",
+    action="store_true",
+    help="draw classical 2D tree ignoring spatial information of node LP solutions",
+)
+parser.add_argument(
     "--transformation",
     "-t",
     choices=["mds", "tsne", "lle", "spectral", "ltsa"],
@@ -42,4 +47,7 @@ treed = TreeD(
 )
 
 treed.solve()
-treed.draw()
+if args.classic:
+    treed.draw2d()
+else:
+    treed.draw()
