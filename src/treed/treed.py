@@ -242,7 +242,7 @@ class TreeD:
         self.Ze = Ze
 
     def _create_nodes_and_projections(self):
-        colorbar = go.scatter3d.marker.ColorBar(title="", thickness=10, x=0)
+        colorbar = go.scatter3d.marker.ColorBar(title="", thickness=10, x=-0.05)
         marker = go.scatter3d.Marker(
             symbol=self.df["symbol"],
             size=self.nodesize,
@@ -278,7 +278,7 @@ class TreeD:
         return node_object, proj_object
 
     def _create_nodes_frames(self):
-        colorbar = go.scatter3d.marker.ColorBar(title="", thickness=10, x=0)
+        colorbar = go.scatter3d.marker.ColorBar(title="", thickness=10, x=-0.05)
         marker = go.scatter3d.Marker(
             symbol=self.df["symbol"],
             size=self.nodesize,
@@ -332,7 +332,7 @@ class TreeD:
         return frames, sliders_dict
 
     def _create_nodes_frames_2d(self):
-        colorbar = go.scatter.marker.ColorBar(title="", thickness=10, x=0)
+        colorbar = go.scatter.marker.ColorBar(title="", thickness=10, x=-0.05)
         marker = go.scatter.Marker(
             symbol=self.df["symbol"],
             size=self.nodesize * 2,
@@ -586,7 +586,7 @@ class TreeD:
             Xed += [self.pos2d[edge[0]][0], self.pos2d[edge[1]][0], None]
             Yed += [self.pos2d[edge[0]][1], self.pos2d[edge[1]][1], None]
 
-        colorbar = go.scatter.marker.ColorBar(title="", thickness=10, x=0)
+        colorbar = go.scatter.marker.ColorBar(title="", thickness=10, x=-0.05)
         marker = go.scatter.Marker(
             symbol=self.df["symbol"],
             size=self.nodesize * 2,
