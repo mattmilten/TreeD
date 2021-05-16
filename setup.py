@@ -20,6 +20,5 @@ setup(
         "Operating System :: OS Independent",
     ],
     install_requires=["pyscipopt", "scikit-learn", "pandas", "plotly", "networkx"],
-    python_requires=">=3.6",
-    scripts=['bin/treed'],
+    python_requires=">=3.6"
 )

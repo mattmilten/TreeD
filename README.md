@@ -6,7 +6,7 @@
 
 [![Example](res/treed-example.png)](https://plot.ly/~mattmilten/103/)
 
-TreeD uses SCIP via PySCIPOpt to visualize the Branch-and-Cut tree traversed during the solution of a mixed-integer linear program (MIP or MILP). The LP solutions at each node are projected into a 2-dimensional space using a range of different transformation algorithms. Per default, multi-dimensional scaling (mds) is used. Other methods and further options can be displayed by running the main program with the `--help` flag. The 2-dimensional data points are visualized in a 3D space with regards to their respective LP solution value. Nodes higher up represent LP solutions with a higher value. These nodes are usually found later in the search and show the progress in increasing the lower or dual bound to close the MIP gap.
+TreeD uses SCIP via PySCIPOpt to visualize the Branch-and-Cut tree traversed during the solution of a mixed-integer linear program (MIP or MILP). The LP solutions at each node are projected into a 2-dimensional space using a range of different transformation algorithms. Per default, multi-dimensional scaling (mds) is used. Other methods and further options can be displayed by running `python -m treed --help`. The 2-dimensional data points are visualized in a 3D space with regards to their respective LP solution value. Nodes higher up represent LP solutions with a higher value. These nodes are usually found later in the search and show the progress in increasing the lower or dual bound to close the MIP gap.
 
 The color of the individual nodes is used to show different values like node age, LP iteration count, or LP condition number.
 
@@ -21,7 +21,7 @@ python -m pip install treed
 ```
 
 ## Usage
-- run Python script `bin/treed --help` (will be installed into your PATH on Linux/macOS when using `pip install treed`) to get usage information or use this code snippet in a Jupyter notebook:
+- run `python -m treed --help` to get usage information or use this code snippet in a Jupyter notebook:
 
 ```
 from treed import TreeD
