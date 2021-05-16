@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description=desc)
 
 parser.add_argument("model", type=str, help="path to model")
 parser.add_argument(
-    "--classic",
+    "--classic", "-c",
     action="store_true",
     help="draw classical 2D tree ignoring spatial information of node LP solutions",
 )
@@ -29,11 +29,17 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--quiet", action="store_true", help="hide solving and progress output",
+    "--quiet", "-q", action="store_true", help="hide solving and progress output",
 )
 
 parser.add_argument(
-    "--nodelimit", type=int, default=500, help="node limit for solving the model"
+    "--nodelimit", "-n", type=int, default=500, help="node limit for solving the model"
+)
+parser.add_argument(
+    "--setfile",
+    "-s",
+    default=None,
+    help="path to SCIP settings file",
 )
 
 args = parser.parse_args()
@@ -44,6 +50,7 @@ treed = TreeD(
     showcuts=~args.hidecuts,
     nodelimit=args.nodelimit,
     verbose=~args.quiet,
+    setfile=args.setfile
 )
 
 treed.solve()

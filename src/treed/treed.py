@@ -26,6 +26,10 @@ class LPstatEventhdlr(Eventhdlr):
             # store only solution values above 1e-6
             if abs(solval) > 1e-6:
                 LPsol[var.name] = self.model.getSolVal(None, var)
+
+        # skip duplicate nodes
+        # if self.nodelist and LPsol == self.nodelist[-1].get("LPsol"):
+        #     return
         node = self.model.getCurrentNode()
         if node.getNumber() != 1:
             parentnode = node.getParent()
@@ -37,19 +41,31 @@ class LPstatEventhdlr(Eventhdlr):
         age = self.model.getNNodes()
         condition = math.log10(self.model.getCondition())
         iters = self.model.lpiGetIterations()
-        self.nodelist.append(
-            {
-                "number": node.getNumber(),
-                "LPsol": LPsol,
-                "objval": objval,
-                "parent": parent,
-                "age": age,
-                "depth": depth,
-                "first": firstlp,
-                "condition": condition,
-                "iterations": iters,
-            }
-        )
+
+        nodedict = {
+            "number": node.getNumber(),
+            "LPsol": LPsol,
+            "objval": objval,
+            "parent": parent,
+            "age": age,
+            "depth": depth,
+            "first": firstlp,
+            "condition": condition,
+            "iterations": iters,
+            # "variables": self.model.getNVars(),
+            # "constraints": self.model.getNConss(),
+            "rows": self.model.getNLPRows(),
+        }
+        # skip 0-iterations LPs (duplicates?)
+        if firstlp:
+            self.nodelist.append(nodedict)
+        elif iters >= 0:
+            prevevent = self.nodelist[-1]
+            if nodedict["number"] == prevevent["number"] and not prevevent["first"]:
+                # overwrite data from previous LP event
+                self.nodelist[-1] = nodedict
+            else:
+                self.nodelist.append(nodedict)
 
     def eventexec(self, event):
         if event.getType() == SCIP_EVENTTYPE.FIRSTLPSOLVED:
@@ -96,6 +112,7 @@ class TreeD:
     def __init__(self, **kwargs):
         self.probpath = kwargs.get("probpath", "")
         self.scip_settings = [("limits/totalnodes", kwargs.get("nodelimit", 500))]
+        self.setfile = kwargs.get("setfile", None)
         self.transformation = kwargs.get("transformation", "mds")
         self.showcuts = kwargs.get("showcuts", True)
         self.verbose = kwargs.get("verbose", True)
@@ -115,7 +132,6 @@ class TreeD:
         self.include_plotlyjs = "cdn"
         self.nxgraph = nx.Graph()
         self.stress = None
-        self._symbol = []
 
     def transform(self):
         """compute transformations of LP solutions into 2-dimensional space"""
@@ -175,66 +191,37 @@ class TreeD:
 
         symbol = []
 
-        if not separate_frames:
-            if self.showcuts:
-                self.nxgraph.add_nodes_from(range(len(self.df)))
-                for index, curr in self.df.iterrows():
-                    if curr["first"]:
-                        symbol += ["circle"]
-                        # skip root node
-                        if curr["number"] == 1:
-                            continue
-                        # found first LP solution of a new child node
-                        # parent is last LP of parent node
-                        parent = self.df[self.df["number"] == curr["parent"]].iloc[-1]
-                    else:
-                        # found an improving LP solution at the same node as before
-                        symbol += ["diamond"]
-                        parent = self.df.iloc[index - 1]
-
-                    Xe += [float(parent["x"]), curr["x"], None]
-                    Ye += [float(parent["y"]), curr["y"], None]
-                    Ze += [float(parent["objval"]), curr["objval"], None]
-                    self.nxgraph.add_edge(parent.name, curr.name)
-            else:
-                self.nxgraph.add_nodes_from(list(self.df["number"]))
-                for index, curr in self.df.iterrows():
+        if self.showcuts:
+            self.nxgraph.add_nodes_from(self.df["id"])
+            for index, curr in self.df.iterrows():
+                if curr["first"]:
                     symbol += ["circle"]
+                    # skip root node
                     if curr["number"] == 1:
                         continue
-                    parent = self.df[self.df["number"] == curr["parent"]]
-                    Xe += [float(parent["x"]), curr["x"], None]
-                    Ye += [float(parent["y"]), curr["y"], None]
-                    Ze += [float(parent["objval"]), curr["objval"], None]
-                    self.nxgraph.add_edge(parent.iloc[0]["number"], curr["number"])
+                    # found first LP solution of a new child node
+                    # parent is last LP of parent node
+                    parent = self.df[self.df["number"] == curr["parent"]].iloc[-1]
+                else:
+                    # found an improving LP solution at the same node as before
+                    symbol += ["diamond"]
+                    parent = self.df.iloc[index - 1]
 
+                Xe += [parent["x"], curr["x"], None]
+                Ye += [parent["y"], curr["y"], None]
+                Ze += [parent["objval"], curr["objval"], None]
+                self.nxgraph.add_edge(parent["id"], curr["id"])
         else:
-            max_age = self.df["age"].max()
-            for i in range(1, max_age + 1):
-                tmp = self.df[self.df["age"] == i]
-                Xe_ = []
-                Ye_ = []
-                Ze_ = []
-                for index, curr in tmp.iterrows():
-                    if curr["first"]:
-                        symbol += ["circle"]
-                        # skip root node
-                        if curr["number"] == 1:
-                            continue
-                        # found first LP solution of a new child node
-                        # parent is last LP of parent node
-                        parent = self.df[self.df["number"] == curr["parent"]].iloc[-1]
-                    else:
-                        # found an improving LP solution at the same node as before
-                        symbol += ["diamond"]
-                        parent = self.df.iloc[index - 1]
-
-                    Xe_ += [float(parent["x"]), curr["x"], None]
-                    Ye_ += [float(parent["y"]), curr["y"], None]
-                    Ze_ += [float(parent["objval"]), curr["objval"], None]
-                Xe.append(Xe_)
-                Ye.append(Ye_)
-                Ze.append(Ze_)
+            self.nxgraph.add_nodes_from(self.df["id"])
+            for index, curr in self.df.iterrows():
+                symbol += ["circle"]
+                if curr["number"] == 1:
+                    continue
+                parent = self.df[self.df["number"] == curr["parent"]].iloc[-1]
+                Xe += [parent["x"], curr["x"], None]
+                Ye += [parent["y"], curr["y"], None]
+                Ze += [parent["objval"], curr["objval"], None]
+                self.nxgraph.add_edge(parent["id"], curr["id"])
 
         self.df["symbol"] = symbol
         self.Xe = Xe
@@ -356,8 +343,8 @@ class TreeD:
         for a in self.df["age"]:
             adf = self.df[self.df["age"] <= a]
             node_object = go.Scatter(
-                x=[self.pos2d[k][0] for k in range(len(adf))],
-                y=[self.pos2d[k][1] for k in range(len(adf))],
+                x=[self.pos2d[k][0] for k in adf["id"]],
+                y=[self.pos2d[k][1] for k in adf["id"]],
                 mode="markers",
                 marker=marker,
                 hovertext=[
@@ -482,7 +469,6 @@ class TreeD:
             ]
         )
 
-
     def draw(self):
         """Draw the tree, depending on the mode"""
 
@@ -578,8 +564,8 @@ class TreeD:
         self.hierarchy_pos()
         frames, sliders = self._create_nodes_frames_2d()
 
-        Xv = [self.pos2d[k][0] for k in range(len(self.pos2d))]
-        Yv = [self.pos2d[k][1] for k in range(len(self.pos2d))]
+        Xv = [self.pos2d[k][0] for k in self.df["id"]]
+        Yv = [self.pos2d[k][1] for k in self.df["id"]]
         Xed = []
         Yed = []
         for edge in self.nxgraph.edges:
@@ -668,7 +654,10 @@ class TreeD:
             eventhdlr, "LPstat", "generate LP statistics after every LP event"
         )
         model.readProblem(self.probpath)
+        if self.setfile:
+            model.readParams(self.setfile)
         model.setIntParam("presolving/maxrestarts", 0)
+        model.setParam("estimation/restarts/restartpolicy", "n")
 
         for setting in self.scip_settings:
             model.setParam(setting[0], setting[1])
@@ -698,19 +687,36 @@ class TreeD:
         columns = self.nodelist[0].keys()
         self.df = pd.DataFrame(self.nodelist, columns=columns)
 
-        # merge solutions from cutting rounds into one node
+        # drop last data point of every node, since it's a duplicate
+        # for n in self.df["number"]:
+        #     seq = self.df[(self.df["first"] == False) & (self.df["number"] == n)]
+        #     if len(seq) > 0:
+        #         self.df.drop(
+        #             index=seq.index[-1], inplace=True,
+        #         )
+
+        # merge solutions from cutting rounds into one node, preserving the latest
+        # if self.showcuts:
+        #     self.df = (
+        #         self.df[self.df["first"] == False]
+        #         .drop_duplicates(subset="age", keep="last")
+        #         .reset_index()
+        #     )
         if not self.showcuts:
-            self.df = (
-                self.df[self.df["first"] == False]
-                .drop_duplicates(subset="age", keep="last")
-                .reset_index()
-            )
+            self.df = self.df[self.df["first"]].reset_index()
+
+        self.df["id"] = self.df.index
 
     def hierarchy_pos(self, root=0, width=1.0, vert_gap=0.2, vert_loc=0, xcenter=0.5):
-        """compute abstract node positions of the tree"""
+        """compute abstract node positions of the tree
+        From Joel's answer at https://stackoverflow.com/a/29597209/2966723.  
+        Licensed under Creative Commons Attribution-Share Alike 
+        """
         G = self.nxgraph
         if not nx.is_tree(G):
-            raise TypeError("cannot use hierarchy_pos on a graph that is not a tree")
+            # raise TypeError("cannot use hierarchy_pos on a graph that is not a tree")
+            self.pos2d = nx.kamada_kawai_layout(G)
+            return
 
         def _hierarchy_pos(
             G,
