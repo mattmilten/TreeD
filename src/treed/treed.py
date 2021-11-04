@@ -55,11 +55,13 @@ class LPstatEventhdlr(Eventhdlr):
             # "variables": self.model.getNVars(),
             # "constraints": self.model.getNConss(),
             "rows": self.model.getNLPRows(),
+            "primalbound": self.model.getPrimalbound(),
+            "dualbound": self.model.getDualbound(),
         }
         # skip 0-iterations LPs (duplicates?)
         if firstlp:
             self.nodelist.append(nodedict)
-        elif iters >= 0:
+        elif iters > 0:
             prevevent = self.nodelist[-1]
             if nodedict["number"] == prevevent["number"] and not prevevent["first"]:
                 # overwrite data from previous LP event
@@ -279,7 +281,11 @@ class TreeD:
             active=0,
             yanchor="top",
             xanchor="left",
-            currentvalue={"prefix": "Age:", "visible": True, "xanchor": "right",},
+            currentvalue={
+                "prefix": "Age:",
+                "visible": True,
+                "xanchor": "right",
+            },
             len=0.9,
             x=0.05,
             y=0.1,
@@ -333,18 +339,27 @@ class TreeD:
             active=0,
             yanchor="top",
             xanchor="left",
-            currentvalue={"prefix": "Age:", "visible": True, "xanchor": "right",},
+            currentvalue={
+                "prefix": "Age:",
+                "visible": True,
+                "xanchor": "right",
+            },
             len=0.9,
             x=0.05,
             y=0.1,
             steps=[],
         )
 
+        # get start and end points for bound line plots
+        xmin = min([self.pos2d[k][0] for k in self.pos2d])
+        xmax = max([self.pos2d[k][0] for k in self.pos2d])
+
         for a in self.df["age"]:
             adf = self.df[self.df["age"] <= a]
             node_object = go.Scatter(
                 x=[self.pos2d[k][0] for k in adf["id"]],
-                y=[self.pos2d[k][1] for k in adf["id"]],
+                # y=[self.pos2d[k][1] for k in adf["id"]],
+                y=[self.df["objval"][k] for k in adf["id"]],
                 mode="markers",
                 marker=marker,
                 hovertext=[
@@ -360,7 +375,24 @@ class TreeD:
                 opacity=0.7,
                 name="LP solutions",
             )
-            frames.append(go.Frame(data=node_object, name=str(a)))
+            primalbound = go.Scatter(
+                x=[xmin, xmax],
+                y=2 * [adf["primalbound"].iloc[-1]],
+                mode="lines",
+                opacity=0.5,
+                name="Primal Bound",
+            )
+            dualbound = go.Scatter(
+                x=[xmin, xmax],
+                y=2 * [adf["dualbound"].iloc[-1]],
+                mode="lines",
+                opacity=0.5,
+                name="Dual Bound",
+            )
+
+            frames.append(
+                go.Frame(data=[node_object, primalbound, dualbound], name=str(a))
+            )
 
             slider_step = {
                 "args": [
@@ -443,7 +475,10 @@ class TreeD:
                                 args=[
                                     None,
                                     {
-                                        "frame": {"duration": 50, "redraw": True,},
+                                        "frame": {
+                                            "duration": 50,
+                                            "redraw": True,
+                                        },
                                         "fromcurrent": True,
                                     },
                                 ],
@@ -543,7 +578,9 @@ class TreeD:
         layout["sliders"] = [sliders]
 
         self.fig = go.Figure(
-            data=[nodes, nodeprojs, edges, optval], layout=layout, frames=frames,
+            data=[nodes, nodeprojs, edges, optval],
+            layout=layout,
+            frames=frames,
         )
 
         self.fig.write_html(file=filename, include_plotlyjs=self.include_plotlyjs)
@@ -565,12 +602,14 @@ class TreeD:
         frames, sliders = self._create_nodes_frames_2d()
 
         Xv = [self.pos2d[k][0] for k in self.df["id"]]
-        Yv = [self.pos2d[k][1] for k in self.df["id"]]
+        # Yv = [self.pos2d[k][1] for k in self.df["id"]]
+        Yv = self.df["objval"]
         Xed = []
         Yed = []
         for edge in self.nxgraph.edges:
             Xed += [self.pos2d[edge[0]][0], self.pos2d[edge[1]][0], None]
-            Yed += [self.pos2d[edge[0]][1], self.pos2d[edge[1]][1], None]
+            # Yed += [self.pos2d[edge[0]][1], self.pos2d[edge[1]][1], None]
+            Yed += [self.df["objval"][edge[0]], self.df["objval"][edge[1]], None]
 
         colorbar = go.scatter.marker.ColorBar(title="", thickness=10, x=-0.05)
         marker = go.scatter.Marker(
@@ -607,8 +646,24 @@ class TreeD:
             hoverinfo="text+name",
         )
 
-        xaxis = go.layout.XAxis(title="", visible=False)
-        yaxis = go.layout.YAxis(title="", visible=False)
+        xmin = min(Xv)
+        xmax = max(Xv)
+        primalbound = go.Scatter(
+            x=[xmin, xmax],
+            y=2 * [self.df["primalbound"].iloc[len(self.df) - 1]],
+            mode="lines",
+            name="Primal Bound",
+        )
+        dualbound = go.Scatter(
+            x=[xmin, xmax],
+            y=2 * [self.df["dualbound"].iloc[len(self.df) - 1]],
+            mode="lines",
+            name="Dual Bound",
+        )
+
+        margin = 0.05*xmax
+        xaxis = go.layout.XAxis(title="", visible=False, range=[xmin-margin, xmax+margin], autorange=False)
+        yaxis = go.layout.YAxis(title="objective value", visible=True, side="right")
 
         title = (
             "Tree 2D: " + self.probname + ", " + self.scipversion if self.title else ""
@@ -630,7 +685,11 @@ class TreeD:
 
         layout["sliders"] = [sliders]
 
-        self.fig2d = go.Figure(data=[nodes, edges], layout=layout, frames=frames,)
+        self.fig2d = go.Figure(
+            data=[nodes, primalbound, dualbound, edges],
+            layout=layout,
+            frames=frames,
+        )
 
         self.fig2d.write_html(file=filename, include_plotlyjs=self.include_plotlyjs)
 
@@ -778,4 +837,3 @@ class TreeD:
         for k in set([*p1.keys(), *p2.keys()]):
             dist += (p1.get(k, 0) - p2.get(k, 0)) ** 2
         return math.sqrt(dist)
-
