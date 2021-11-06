@@ -1,6 +1,7 @@
 from pyscipopt import Model, Eventhdlr, SCIP_EVENTTYPE
 from sklearn import manifold
 import pandas as pd
+import numpy as np
 import plotly.graph_objs as go
 import networkx as nx
 import os
@@ -41,7 +42,10 @@ class LPstatEventhdlr(Eventhdlr):
         age = self.model.getNNodes()
         condition = math.log10(self.model.getCondition())
         iters = self.model.lpiGetIterations()
-
+        pb = self.model.getPrimalbound()
+        if pb >= self.model.infinity():
+            pb = None
+        
         nodedict = {
             "number": node.getNumber(),
             "LPsol": LPsol,
@@ -55,7 +59,7 @@ class LPstatEventhdlr(Eventhdlr):
             # "variables": self.model.getNVars(),
             # "constraints": self.model.getNConss(),
             "rows": self.model.getNLPRows(),
-            "primalbound": self.model.getPrimalbound(),
+            "primalbound": pb,
             "dualbound": self.model.getDualbound(),
         }
         # skip 0-iterations LPs (duplicates?)
@@ -292,7 +296,15 @@ class TreeD:
             steps=[],
         )
 
-        for a in self.df["age"]:
+        # get start and end points for bound line plots
+        min_x = min(self.df["x"])
+        max_x = max(self.df["x"])
+        min_y = min(self.df["y"])
+        max_y = max(self.df["y"])
+
+        maxage = max(self.df["age"])
+        for a in np.linspace(1, maxage, min(200, maxage)):
+            a = int(a)
             adf = self.df[self.df["age"] <= a]
             node_object = go.Scatter3d(
                 x=adf["x"],
@@ -301,12 +313,34 @@ class TreeD:
                 mode="markers+text",
                 marker=marker,
                 hovertext=adf["number"],
-                hovertemplate="LP obj: %{z}<br>node number: %{hovertext}<br>%{marker.color}",
+                # hovertemplate="LP obj: %{z}<br>node number: %{hovertext}<br>%{marker.color}",
                 hoverinfo="z+text+name",
                 opacity=0.7,
-                name="LP solutions",
+                name="LP Solutions",
             )
-            frames.append(go.Frame(data=node_object, name=str(a)))
+
+            primalbound = go.Scatter3d(
+                x=[min_x, min_x, max_x, max_x, min_x],
+                y=[min_y, max_y, max_y, min_y, min_y],
+                z=[adf["primalbound"].iloc[-1]] * 5,
+                mode="lines",
+                line=go.scatter3d.Line(width=5),
+                hoverinfo="name+z",
+                name="Primal Bound",
+                opacity=0.5,
+            )
+            dualbound = go.Scatter3d(
+                x=[min_x, min_x, max_x, max_x, min_x],
+                y=[min_y, max_y, max_y, min_y, min_y],
+                z=[adf["dualbound"].iloc[-1]] * 5,
+                mode="lines",
+                line=go.scatter3d.Line(width=5),
+                hoverinfo="name+z",
+                name="Dual Bound",
+                opacity=0.5,
+            )
+
+            frames.append(go.Frame(data=[node_object, primalbound, dualbound], name=str(a)))
 
             slider_step = {
                 "args": [
@@ -354,7 +388,9 @@ class TreeD:
         xmin = min([self.pos2d[k][0] for k in self.pos2d])
         xmax = max([self.pos2d[k][0] for k in self.pos2d])
 
-        for a in self.df["age"]:
+        maxage = max(self.df["age"])
+        for a in np.linspace(1, maxage, min(200, maxage)):
+            a = int(a)
             adf = self.df[self.df["age"] <= a]
             node_object = go.Scatter(
                 x=[self.pos2d[k][0] for k in adf["id"]],
@@ -362,18 +398,18 @@ class TreeD:
                 y=[self.df["objval"][k] for k in adf["id"]],
                 mode="markers",
                 marker=marker,
-                hovertext=[
-                    f"LP obj: {adf['objval'].iloc[i]:.3f}\
-                    <br>node number: {adf['number'].iloc[i]}\
-                    <br>node age: {adf['age'].iloc[i]}\
-                    <br>depth: {adf['depth'].iloc[i]}\
-                    <br>LP cond: {adf['condition'].iloc[i]:.1f}\
-                    <br>iterations: {adf['iterations'].iloc[i]}"
-                    for i in range(len(adf))
-                ],
+                # hovertext=[
+                #     f"LP obj: {adf['objval'].iloc[i]:.3f}\
+                #     <br>node number: {adf['number'].iloc[i]}\
+                #     <br>node age: {adf['age'].iloc[i]}\
+                #     <br>depth: {adf['depth'].iloc[i]}\
+                #     <br>LP cond: {adf['condition'].iloc[i]:.1f}\
+                #     <br>iterations: {adf['iterations'].iloc[i]}"
+                #     for i in range(len(adf))
+                # ],
                 hoverinfo="text+name",
                 opacity=0.7,
-                name="LP solutions",
+                name="LP Solutions",
             )
             primalbound = go.Scatter(
                 x=[xmin, xmax],
@@ -460,6 +496,24 @@ class TreeD:
                                     }
                                 ],
                             ),
+                            # dict(
+                            #     label="logarithmic obj",
+                            #     method="relayout",
+                            #     args=[
+                            #         {
+                            #             "yaxis.type": 'log'
+                            #         }
+                            #     ],
+                            # ),
+                            # dict(
+                            #     label="linear obj",
+                            #     method="relayout",
+                            #     args=[
+                            #         {
+                            #             "yaxis.type": 'linear'
+                            #         }
+                            #     ],
+                            # ),
                         ]
                     ),
                     direction="down",
@@ -470,7 +524,7 @@ class TreeD:
                     buttons=list(
                         [
                             dict(
-                                label="▶",
+                                label="|▶",
                                 method="animate",
                                 args=[
                                     None,
@@ -485,9 +539,9 @@ class TreeD:
                                 args2=[
                                     [None],
                                     {
-                                        "frame": {"duration": 0, "redraw": False},
+                                        "frame": {"duration": 1, "redraw": False},
                                         "mode": "immediate",
-                                        "transition": {"duration": 0},
+                                        "transition": {"duration": 1},
                                     },
                                 ],
                             )
@@ -523,7 +577,7 @@ class TreeD:
             mode="lines",
             line=go.scatter3d.Line(color="rgb(75,75,75)", width=2),
             hoverinfo="none",
-            name="edges",
+            name="Edges",
         )
 
         min_x = min(self.df["x"])
@@ -531,14 +585,34 @@ class TreeD:
         min_y = min(self.df["y"])
         max_y = max(self.df["y"])
 
+        primalbound = go.Scatter3d(
+            x=[min_x, min_x, max_x, max_x, min_x],
+            y=[min_y, max_y, max_y, min_y, min_y],
+            z=5 * [self.df["primalbound"].iloc[-1]],
+            mode="lines",
+            line=go.scatter3d.Line(width=5),
+            hoverinfo="name+z",
+            opacity=0.5,
+            name="Primal Bound",
+        )
+        dualbound = go.Scatter3d(
+            x=[min_x, min_x, max_x, max_x, min_x],
+            y=[min_y, max_y, max_y, min_y, min_y],
+            z=5 * [self.df["dualbound"].iloc[-1]],
+            mode="lines",
+            line=go.scatter3d.Line(width=5),
+            hoverinfo="name+z",
+            opacity=0.5,
+            name="Dual Bound",
+        )
         optval = go.Scatter3d(
             x=[min_x, min_x, max_x, max_x, min_x],
             y=[min_y, max_y, max_y, min_y, min_y],
             z=[self.optval] * 5,
             mode="lines",
-            line=go.scatter3d.Line(color="rgb(0,200,50)", width=5),
+            line=go.scatter3d.Line(width=5),
             hoverinfo="name+z",
-            name="optimal value",
+            name="Optimum",
             opacity=0.5,
         )
 
@@ -555,7 +629,7 @@ class TreeD:
             gridcolor="lightgray",
         )
         zaxis = go.layout.scene.ZAxis(
-            title="objective value", backgroundcolor="white", gridcolor="lightgray"
+            title="Objective value", backgroundcolor="white", gridcolor="lightgray"
         )
         scene = go.layout.Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
         title = (
@@ -566,19 +640,21 @@ class TreeD:
         layout = go.Layout(
             title=title,
             font=dict(size=self.fontsize),
+            font_family="Fira Sans",
             autosize=True,
             # width=900,
             # height=600,
             showlegend=self.showlegend,
             hovermode="closest",
             scene=scene,
+            template="none",
         )
 
         layout["updatemenus"] = self.updatemenus()
         layout["sliders"] = [sliders]
 
         self.fig = go.Figure(
-            data=[nodes, nodeprojs, edges, optval],
+            data=[nodes, primalbound, dualbound, optval, nodeprojs, edges],
             layout=layout,
             frames=frames,
         )
@@ -626,7 +702,7 @@ class TreeD:
             mode="lines",
             line=dict(color="rgb(75,75,75)", width=1),
             hoverinfo="none",
-            name="edges",
+            name="Edges",
         )
         nodes = go.Scatter(
             x=Xv,
@@ -652,29 +728,40 @@ class TreeD:
             x=[xmin, xmax],
             y=2 * [self.df["primalbound"].iloc[len(self.df) - 1]],
             mode="lines",
+            opacity=0.5,
             name="Primal Bound",
         )
         dualbound = go.Scatter(
             x=[xmin, xmax],
             y=2 * [self.df["dualbound"].iloc[len(self.df) - 1]],
             mode="lines",
+            opacity=0.5,
             name="Dual Bound",
+        )
+        optval = go.Scatter(
+            x=[xmin, xmax],
+            y=2 * [self.optval],
+            mode="lines",
+            opacity=0.5,
+            name="Optimum",
         )
 
         margin = 0.05*xmax
         xaxis = go.layout.XAxis(title="", visible=False, range=[xmin-margin, xmax+margin], autorange=False)
-        yaxis = go.layout.YAxis(title="objective value", visible=True, side="right")
+        yaxis = go.layout.YAxis(title="Objective value", visible=True, side="right", position=0.98)
 
-        title = (
-            "Tree 2D: " + self.probname + ", " + self.scipversion if self.title else ""
-        )
+        if self.title:
+            title = f"Tree 2D: {self.probname} ({self.scipversion}, {self.status})"
+        else:
+            title = ""
         filename = "Tree_2D_" + self.probname + ".html"
 
         layout = go.Layout(
             title=title,
             font=dict(size=self.fontsize),
+            font_family="Fira Sans",
             autosize=True,
-            template="simple_white",
+            template="none",
             showlegend=self.showlegend,
             hovermode="closest",
             xaxis=xaxis,
@@ -682,11 +769,10 @@ class TreeD:
         )
 
         layout["updatemenus"] = self.updatemenus()
-
         layout["sliders"] = [sliders]
 
         self.fig2d = go.Figure(
-            data=[nodes, primalbound, dualbound, edges],
+            data=[nodes, primalbound, dualbound, optval, edges],
             layout=layout,
             frames=frames,
         )
@@ -704,7 +790,9 @@ class TreeD:
 
         model = Model("TreeD")
 
-        if not self.verbose:
+        if self.verbose:
+            model.redirectOutput()
+        else:
             model.hideOutput()
 
         eventhdlr = LPstatEventhdlr()
@@ -735,7 +823,8 @@ class TreeD:
         self.scipversion = "SCIP " + str(model.version())
         # self.scipversion = self.scipversion[:-1]+'.'+self.scipversion[-1]
 
-        if model.getStatus() == "optimal":
+        self.status = model.getStatus()
+        if self.status == "optimal":
             self.optval = model.getObjVal()
         else:
             self.optval = None

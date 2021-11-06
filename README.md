@@ -28,13 +28,20 @@ from treed import TreeD
 
 treed = TreeD(
     probpath="model.mps",
-    nodelimit=20,
-    transformation='mds',
+    nodelimit=2000,
     showcuts=True
 )
 
 treed.solve()
 fig = treed.draw()
+fig.show(renderer='notebook')
+```
+
+There is also a (faster) 2D mode that skips the projection of LP solutions and generates a more traditional tree instead:
+
+```
+...
+fig = treed.draw2d()
 fig.show(renderer='notebook')
 ```
 
