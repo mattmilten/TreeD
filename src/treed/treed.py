@@ -632,9 +632,12 @@ class TreeD:
             title="Objective value", backgroundcolor="white", gridcolor="lightgray"
         )
         scene = go.layout.Scene(xaxis=xaxis, yaxis=yaxis, zaxis=zaxis)
-        title = (
-            "TreeD: " + self.probname + ", " + self.scipversion if self.title else ""
-        )
+
+        if self.title:
+            title = f"TreeD: {self.probname} ({self.scipversion}, {self.status})"
+        else:
+            title = ""
+        
         filename = "TreeD_" + self.probname + ".html"
 
         layout = go.Layout(

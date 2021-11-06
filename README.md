@@ -4,7 +4,15 @@
 
 ### Visual representation of the branch-and-cut tree of SCIP using spatial dissimilarities of LP solutions -- [Interactive Example](http://www.zib.de/miltenberger/treed-showcase.html)
 
-[![Example](res/treed-example.png)](https://plot.ly/~mattmilten/103/)
+---
+
+![Example](res/treed-example.png)
+
+---
+
+![Example2D](res/tree2d-example.png)
+
+---
 
 TreeD uses SCIP via PySCIPOpt to visualize the Branch-and-Cut tree traversed during the solution of a mixed-integer linear program (MIP or MILP). The LP solutions at each node are projected into a 2-dimensional space using a range of different transformation algorithms. Per default, multi-dimensional scaling (mds) is used. Other methods and further options can be displayed by running `python -m treed --help`. The 2-dimensional data points are visualized in a 3D space with regards to their respective LP solution value. Nodes higher up represent LP solutions with a higher value. These nodes are usually found later in the search and show the progress in increasing the lower or dual bound to close the MIP gap.
 

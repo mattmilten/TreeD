@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="treed",
-    version="1.2.1",
+    version="2.0.0",
     author="Matthias Miltenberger",
     author_email="matthias.miltenberger@gmail.com",
     description="3D Visualization of Branch-and-Cut Trees using PySCIPOpt",
@@ -19,6 +19,6 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["pyscipopt", "scikit-learn", "pandas", "plotly", "networkx"],
+    install_requires=["pyscipopt", "scikit-learn", "pandas", "plotly", "networkx", "numpy"],
     python_requires=">=3.6"
 )
