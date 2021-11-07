@@ -45,7 +45,7 @@ class LPstatEventhdlr(Eventhdlr):
         pb = self.model.getPrimalbound()
         if pb >= self.model.infinity():
             pb = None
-        
+
         nodedict = {
             "number": node.getNumber(),
             "LPsol": LPsol,
@@ -138,6 +138,7 @@ class TreeD:
         self.include_plotlyjs = "cdn"
         self.nxgraph = nx.Graph()
         self.stress = None
+        self.start_frame = kwargs.get("start_frame", 1)
 
     def transform(self):
         """compute transformations of LP solutions into 2-dimensional space"""
@@ -167,17 +168,17 @@ class TreeD:
         self.df["x"] = xy[:, 0]
         self.df["y"] = xy[:, 1]
 
-    def performSpatialAnalysis(self):
-        """compute spatial correlation between LP solutions and their condition numbers"""
-        import pysal
+    # def performSpatialAnalysis(self):
+    #     """compute spatial correlation between LP solutions and their condition numbers"""
+    #     import pysal
 
-        df = pd.DataFrame(self.nodelist, columns=["LPsol", "condition"])
-        lpsols = df["LPsol"].apply(pd.Series).fillna(value=0)
-        if self.weights == "kernel":
-            weights = pysal.Kernel(lpsols, function=self.kernelfunction)
-        else:
-            weights = pysal.knnW_from_array(lpsols, k=self.knn_k)
-        self.moran = pysal.Moran(df["condition"].tolist(), weights)
+    #     df = pd.DataFrame(self.nodelist, columns=["LPsol", "condition"])
+    #     lpsols = df["LPsol"].apply(pd.Series).fillna(value=0)
+    #     if self.weights == "kernel":
+    #         weights = pysal.Kernel(lpsols, function=self.kernelfunction)
+    #     else:
+    #         weights = pysal.knnW_from_array(lpsols, k=self.knn_k)
+    #     self.moran = pysal.Moran(df["condition"].tolist(), weights)
 
     def _generateEdges(self, separate_frames=False):
         """Generate edge information corresponding to parent information in df
@@ -285,11 +286,7 @@ class TreeD:
             active=0,
             yanchor="top",
             xanchor="left",
-            currentvalue={
-                "prefix": "Age:",
-                "visible": True,
-                "xanchor": "right",
-            },
+            currentvalue={"prefix": "Age:", "visible": True, "xanchor": "right",},
             len=0.9,
             x=0.05,
             y=0.1,
@@ -340,7 +337,9 @@ class TreeD:
                 opacity=0.5,
             )
 
-            frames.append(go.Frame(data=[node_object, primalbound, dualbound], name=str(a)))
+            frames.append(
+                go.Frame(data=[node_object, primalbound, dualbound], name=str(a))
+            )
 
             slider_step = {
                 "args": [
@@ -370,14 +369,10 @@ class TreeD:
 
         frames = []
         sliders_dict = dict(
-            active=0,
+            active=self.start_frame-1,
             yanchor="top",
             xanchor="left",
-            currentvalue={
-                "prefix": "Age:",
-                "visible": True,
-                "xanchor": "right",
-            },
+            currentvalue={"prefix": "Age:", "visible": True, "xanchor": "right",},
             len=0.9,
             x=0.05,
             y=0.1,
@@ -524,27 +519,28 @@ class TreeD:
                     buttons=list(
                         [
                             dict(
-                                label="|▶",
+                                label="▶",
                                 method="animate",
                                 args=[
                                     None,
                                     {
-                                        "frame": {
-                                            "duration": 50,
-                                            "redraw": True,
-                                        },
+                                        "frame": {"duration": 50, "redraw": True,},
                                         "fromcurrent": True,
                                     },
                                 ],
-                                args2=[
+                            ),
+                            dict(
+                                label="◼",
+                                method="animate",
+                                args=[
                                     [None],
                                     {
-                                        "frame": {"duration": 1, "redraw": False},
+                                        "frame": {"duration": 0, "redraw": False},
                                         "mode": "immediate",
-                                        "transition": {"duration": 1},
+                                        "transition": {"duration": 0},
                                     },
                                 ],
-                            )
+                            ),
                         ]
                     ),
                     direction="left",
@@ -637,7 +633,7 @@ class TreeD:
             title = f"TreeD: {self.probname} ({self.scipversion}, {self.status})"
         else:
             title = ""
-        
+
         filename = "TreeD_" + self.probname + ".html"
 
         layout = go.Layout(
@@ -680,9 +676,11 @@ class TreeD:
         self.hierarchy_pos()
         frames, sliders = self._create_nodes_frames_2d()
 
+        start_frame = self.df[self.df["age"] <= self.start_frame]
+
         Xv = [self.pos2d[k][0] for k in self.df["id"]]
         # Yv = [self.pos2d[k][1] for k in self.df["id"]]
-        Yv = self.df["objval"]
+        # Yv = self.df["objval"]
         Xed = []
         Yed = []
         for edge in self.nxgraph.edges:
@@ -708,8 +706,8 @@ class TreeD:
             name="Edges",
         )
         nodes = go.Scatter(
-            x=Xv,
-            y=Yv,
+            x=[self.pos2d[k][0] for k in start_frame["id"]],
+            y=start_frame["objval"],
             name="LP solutions",
             mode="markers",
             marker=marker,
@@ -729,14 +727,14 @@ class TreeD:
         xmax = max(Xv)
         primalbound = go.Scatter(
             x=[xmin, xmax],
-            y=2 * [self.df["primalbound"].iloc[len(self.df) - 1]],
+            y=2 * [start_frame["primalbound"].iloc[-1]],
             mode="lines",
             opacity=0.5,
             name="Primal Bound",
         )
         dualbound = go.Scatter(
             x=[xmin, xmax],
-            y=2 * [self.df["dualbound"].iloc[len(self.df) - 1]],
+            y=2 * [start_frame["dualbound"].iloc[-1]],
             mode="lines",
             opacity=0.5,
             name="Dual Bound",
@@ -749,9 +747,16 @@ class TreeD:
             name="Optimum",
         )
 
-        margin = 0.05*xmax
-        xaxis = go.layout.XAxis(title="", visible=False, range=[xmin-margin, xmax+margin], autorange=False)
-        yaxis = go.layout.YAxis(title="Objective value", visible=True, side="right", position=0.98)
+        margin = 0.05 * xmax
+        xaxis = go.layout.XAxis(
+            title="",
+            visible=False,
+            range=[xmin - margin, xmax + margin],
+            autorange=False,
+        )
+        yaxis = go.layout.YAxis(
+            title="Objective value", visible=True, side="right", position=0.98
+        )
 
         if self.title:
             title = f"Tree 2D: {self.probname} ({self.scipversion}, {self.status})"
