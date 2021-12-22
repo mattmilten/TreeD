@@ -61,6 +61,7 @@ class LPstatEventhdlr(Eventhdlr):
             "rows": self.model.getNLPRows(),
             "primalbound": pb,
             "dualbound": self.model.getDualbound(),
+            "time": self.model.getSolvingTime()
         }
         # skip 0-iterations LPs (duplicates?)
         if firstlp:
@@ -657,10 +658,10 @@ class TreeD:
         )
 
         if self.showbuttons:
-        layout["updatemenus"] = self.updatemenus()
+            layout["updatemenus"] = self.updatemenus()
         if self.showslider:
-        layout["sliders"] = [sliders]
-
+            layout["sliders"] = [sliders]
+        
         self.fig = go.Figure(
             data=[nodes, primalbound, dualbound, optval, nodeprojs, edges],
             layout=layout,
@@ -786,7 +787,7 @@ class TreeD:
         )
 
         if self.showbuttons:
-        layout["updatemenus"] = self.updatemenus()
+            layout["updatemenus"] = self.updatemenus()
         layout["sliders"] = [sliders]
 
         self.fig2d = go.Figure(
