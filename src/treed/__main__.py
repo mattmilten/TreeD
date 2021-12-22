@@ -1,15 +1,22 @@
 #!/usr/bin/env python
 
-from treed import TreeD
+from treed import TreeD,__version__
 import argparse
 
-desc = """Draw a visual representation of the branch-and-cut tree of SCIP for
+desc = f"""
+    TreeD {__version__} - Draw a visual representation of the branch-and-cut tree of SCIP for
     a particular instance using spatial dissimilarities of the node LP solutions.
     """
 
-parser = argparse.ArgumentParser(description=desc)
+parser = argparse.ArgumentParser(description=desc, prog="treed")
 
 parser.add_argument("model", type=str, help="path to model")
+parser.add_argument(
+    "--version",
+    "-v",
+    action="store_true",
+    help="show version",
+)
 parser.add_argument(
     "--classic",
     "-c",
@@ -41,6 +48,10 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+if args.version:
+    print(f"Treed {__version__}")
+    exit()
 
 treed = TreeD(
     probpath=args.model,

@@ -1,4 +1,8 @@
+import re, os
 from setuptools import setup, find_packages
+
+with open(os.path.join("src", "treed", "__init__.py")) as initfile:
+    (version,) = re.findall('__version__ = "(.*)"', initfile.read())
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
