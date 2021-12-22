@@ -14,7 +14,8 @@ parser.add_argument("model", type=str, help="path to model")
 parser.add_argument(
     "--version",
     "-v",
-    action="store_true",
+    action="version",
+    version=f"TreeD {__version__}",
     help="show version",
 )
 parser.add_argument(

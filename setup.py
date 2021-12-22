@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="treed",
-    version="2.0.1",
+    version=version,
     author="Matthias Miltenberger",
     author_email="matthias.miltenberger@gmail.com",
     description="3D Visualization of Branch-and-Cut Trees using PySCIPOpt",
