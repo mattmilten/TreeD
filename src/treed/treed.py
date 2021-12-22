@@ -124,9 +124,11 @@ class TreeD:
         self.verbose = kwargs.get("verbose", True)
         self.color = "age"
         self.colorscale = "Portland"
-        self.colorbar = False
-        self.title = True
-        self.showlegend = True
+        self.colorbar = kwargs.get("colorbar", True)
+        self.title = kwargs.get("title", True)
+        self.showlegend = kwargs.get("showlegend", True)
+        self.showbuttons = kwargs.get("showbuttons", True)
+        self.showslider = kwargs.get("showslider", True)
         self.fontsize = None
         self.nodesize = 5
         self.weights = "knn"
@@ -163,7 +165,10 @@ class TreeD:
         if self.verbose:
             print(f"✔, time: {time()-start:.2f} seconds")
 
-        # self.stress = mf.stress_  # not available with all transformations
+        try:
+            self.stress = mf.stress_  # not available with all transformations
+        except:
+            print("no stress information available for {self.transformation} transformation")
 
         self.df["x"] = xy[:, 0]
         self.df["y"] = xy[:, 1]
@@ -242,7 +247,7 @@ class TreeD:
             size=self.nodesize,
             color=self.df["age"],
             colorscale=self.colorscale,
-            colorbar=colorbar,
+            colorbar=colorbar if self.colorbar else None,
         )
         node_object = go.Scatter3d(
             x=self.df["x"],
@@ -636,6 +641,7 @@ class TreeD:
 
         filename = "TreeD_" + self.probname + ".html"
 
+        camera = dict(eye=dict(x=1.5, y=1.3, z=0.5))
         layout = go.Layout(
             title=title,
             font=dict(size=self.fontsize),
@@ -646,10 +652,13 @@ class TreeD:
             showlegend=self.showlegend,
             hovermode="closest",
             scene=scene,
+            scene_camera=camera,
             template="none",
         )
 
+        if self.showbuttons:
         layout["updatemenus"] = self.updatemenus()
+        if self.showslider:
         layout["sliders"] = [sliders]
 
         self.fig = go.Figure(
@@ -694,7 +703,7 @@ class TreeD:
             size=self.nodesize * 2,
             color=self.df["age"],
             colorscale=self.colorscale,
-            colorbar=colorbar,
+            colorbar=colorbar if self.colorbar else None,
         )
 
         edges = go.Scatter(
@@ -776,6 +785,7 @@ class TreeD:
             yaxis=yaxis,
         )
 
+        if self.showbuttons:
         layout["updatemenus"] = self.updatemenus()
         layout["sliders"] = [sliders]
 
@@ -915,19 +925,23 @@ class TreeD:
         if self.df is None:
             return
 
-        self.origdist = []
-        self.transdist = []
+        origdist = []
+        transdist = []
         for i in range(len(self.df)):
             for j in range(i + 1, len(self.df)):
-                self.origdist.append(
+                origdist.append(
                     self.distance(self.df["LPsol"].iloc[i], self.df["LPsol"].iloc[j])
                 )
-                self.transdist.append(
+                transdist.append(
                     self.distance(
                         self.df[["x", "y"]].iloc[i], self.df[["x", "y"]].iloc[j]
                     )
                 )
+        self.distances = pd.DataFrame()
+        self.distances["original"] = origdist
+        self.distances["transformed"] = transdist
 
+    @staticmethod
     def distance(p1, p2):
         """euclidean distance between two coordinates (dict-like storage)"""
         dist = 0
