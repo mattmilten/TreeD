@@ -50,10 +50,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-if args.version:
-    print(f"Treed {__version__}")
-    exit()
-
 treed = TreeD(
     probpath=args.model,
     transformation=args.transformation,
