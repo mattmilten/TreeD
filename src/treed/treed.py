@@ -94,6 +94,8 @@ class TreeD:
 
     Attributes:
         scip_settings (list of (str, value)): list of optional SCIP settings to use when solving the instance
+        scip_model (scip.Model): optional SCIP model, can be used to use instances generated with PySCIPOpt or models
+        with user-defined plugins.
         transformation (sr): type of transformation to generate 2D data points ('tsne, 'mds')
         showcuts (bool): whether to show nodes/solutions that originate from cutting rounds
         color (str): data to use for colorization of nodes ('age', 'depth', 'condition')
@@ -118,6 +120,7 @@ class TreeD:
 
     def __init__(self, **kwargs):
         self.probpath = kwargs.get("probpath", "")
+        self.scip_model = kwargs.get("scip_model", None)
         self.scip_settings = [("limits/totalnodes", kwargs.get("nodelimit", 500))]
         self.setfile = kwargs.get("setfile", None)
         self.transformation = kwargs.get("transformation", "mds")
@@ -530,7 +533,7 @@ class TreeD:
                                 args=[
                                     None,
                                     {
-                                        "frame": {"duration": 50, "redraw": True,},
+                                        "frame": {"duration": 50, "redraw": True, },
                                         "fromcurrent": True,
                                     },
                                 ],
@@ -805,9 +808,12 @@ class TreeD:
 
         self.nodelist = []
 
-        self.probname = os.path.splitext(os.path.basename(self.probpath))[0]
-
-        model = Model("TreeD")
+        if self.scip_model:
+            self.probname = self.scip_model.getProbName()
+            model = self.scip_model
+        else:
+            self.probname = os.path.splitext(os.path.basename(self.probpath))[0]
+            model = Model("TreeD")
 
         if self.verbose:
             model.redirectOutput()
